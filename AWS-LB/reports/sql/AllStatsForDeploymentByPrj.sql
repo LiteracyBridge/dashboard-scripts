@@ -1,4 +1,4 @@
-﻿SELECT a.project,deployment,sum(played_seconds_max) AS timeplayed,
+SELECT a.project,deployment,sum(played_seconds_max)/3600 AS hoursplayed,
 	sum(EffectiveCompletions_Max) as EffectiveCompletions,
 	sum(started_max) as started, 
 	sum(quarter_max) as quarter,
@@ -16,5 +16,5 @@
   JOIN packagesindeployment d
   ON a.contentpackage=d.contentpackage
   WHERE a.project = :'prj'
-  GROUP BY a.project,deployment,d."startDate"
-  order by d."startDate"
+  GROUP BY a.project,deployment,d.startdate
+  order by d.startdate

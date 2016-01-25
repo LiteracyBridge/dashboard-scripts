@@ -90,7 +90,7 @@ for project in "${projects[@]}"
    #### ITERATE THROUGH DEPLOYMENTS AND RUN REPORTS
    echo ""
    echo "  DEPLOYMENT REPORTS"
-   deployments=($($psql $dbcxn -c "SELECT deployment from (SELECT distinct deployment, \"startDate\" from packagesindeployment WHERE project ='$project' ORDER BY \"startDate\" DESC, deployment) foo" -t))
+   deployments=($($psql $dbcxn -c "SELECT deployment from (SELECT distinct deployment, startdate from packagesindeployment WHERE project ='$project' ORDER BY startdate DESC, deployment) foo" -t))
    for report in `cat $codebasedir/reportsByDepl.txt`
      do 
        echo "    REPORT:$report"
@@ -122,7 +122,7 @@ for project in "${projects[@]}"
 
    #### ITERATE THROUGH PACKAGES AND RUN REPORTS
    echo "  PACKAGE REPORTS"
-   packages=($($psql $dbcxn -c "SELECT contentpackage from packagesindeployment WHERE project ='$project' ORDER BY \"startDate\" DESC,contentpackage" -t))
+   packages=($($psql $dbcxn -c "SELECT contentpackage from packagesindeployment WHERE project ='$project' ORDER BY startdate DESC,contentpackage" -t))
    for report in `cat $codebasedir/reportsByPkg.txt`
      do 
        echo "    REPORT:$report"

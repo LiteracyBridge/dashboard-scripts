@@ -136,8 +136,8 @@ CREATE TABLE IF NOT EXISTS packagesindeployment
   deployment character varying(255) NOT NULL,
   contentpackage character varying(255) NOT NULL,
   packagename character varying(255),
-  "startDate" date,
-  "endDate" date,
+  startdate date,
+  enddate date,
   languagecode character varying(255),
   groups character varying(255),
   distribution character varying(255)
