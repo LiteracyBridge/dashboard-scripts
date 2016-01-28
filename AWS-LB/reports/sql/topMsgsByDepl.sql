@@ -33,5 +33,6 @@ FROM
   AND contentstats.contentid = cp.contentid
   JOIN categories cat
   ON cat.categoryid = cp.categoryid
+  AND cat.projectcode=cp.project  
   WHERE d.deployment = :'depl'
   ORDER BY effectivecompletions desc--title,deployment

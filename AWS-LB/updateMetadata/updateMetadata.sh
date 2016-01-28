@@ -1,13 +1,15 @@
 #!/bin/sh
 #CONFIGURATION
 # uncomment next line for script debugging
-set -x
+#set -x
 
 if [ -z "$psql" ]; then
   if [ -e /Applications/Postgres.app/Contents/Versions/9.5/bin/psql ]; then
     psql=/Applications/Postgres.app/Contents/Versions/9.5/bin/psql
   elif [ -e /Applications/Postgres.app/Contents/Versions/9.4/bin/psql ]; then
     psql=/Applications/Postgres.app/Contents/Versions/9.4/bin/psql
+  elif [ ! -z $(which psql) ]; then
+    psql=$(which psql)
   else
     echo "Can't find psql!"
     exit 100
@@ -19,7 +21,11 @@ fi
 if [ -z "$dropbox" ]; then
   dropbox=~/Dropbox
 fi
+if [ -z "$acm" ]; then
+    acm=acm.jar
+fi
 echo "Processing stats with dropbox:$dropbox, psql:$psql, dbcxn:$dbcxn"
+echo "acm: $acm"
 
 exportdir=$dropbox/AWS-LB/updateMetadata/ACMexports/
 exportdir=${exportdir%/}
@@ -27,19 +33,18 @@ exportdir=${exportdir%/}
 # Get list of projects (ACM DBs) from database projects table
 projects=($($psql $dbcxn -c "SELECT projectcode from projects WHERE id >= 0" -t))
 
-# Move into Java directory with lib & resources subdirectory
-cd $dropbox/LB-software/ACM-install/ACM/software
-
 #create a single line from list of projects to pass as parameter to jar
 for i in "${projects[@]}"
 do
  project_spaced_list=" $project_spaced_list ACM-$i"
 done
 
+# Move into Java directory with lib & resources subdirectory
+cd $dropbox/LB-software/ACM-install/ACM/software
 echo "Exporting all content metadata and ACMs languages & categories to $exportdir from these ACMs: $project_spaced_list"
 rm $exportdir/*
 mkdir -p $exportdir
-java -cp acm.jar:lib/* org.literacybridge.acm.tools.DBExporter $exportdir $project_spaced_list
+java -Djava.awt.headless=true -cp $acm:lib/* org.literacybridge.acm.tools.DBExporter $exportdir $project_spaced_list
 
 # For each project, import the following data (just exported above):
 #     content metadata
@@ -74,7 +79,7 @@ for i in "${projects[@]}"
       echo DELETE FROM languages WHERE projectcode =$i
       $psql $dbcxn -c "DELETE FROM languages WHERE projectcode ='$i'"
       echo importing languages for $i into AWS
-$psql $dbcxn -c "COPY languages FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-languages.csv
+      $psql $dbcxn -c "COPY languages FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-languages.csv
    fi
    
    # get latest distribution for each project and then CSV files

@@ -28,6 +28,7 @@ FROM
   AND contentstats.contentid = cp.contentid
   JOIN categories cat
   ON cat.categoryid = cp.categoryid
+  AND cat.projectcode=cp.project
   JOIN packagesindeployment d
   ON d.contentpackage = cp.contentpackage
   WHERE d.contentpackage = :'pkg'

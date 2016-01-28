@@ -28,13 +28,12 @@ fi
 # Copy new files
 cp -r ./AWS-LB/* $reportsDir/
 
-# Warn if global dashboard.properties file.
-if [ -e /opt/literacybridge/dashboard.properties ]; then
-  echo "*** Note that the database connection for 'importStats' will come from the global file /opt/literacybridge/dashboard.properties."
-elif [ ! -e $reportsDir/importStats/dashboard.properties ]; then
-  echo "Installing $reportsDir/importstats/dashboard.properties file."
-  cp $reportsDir/opt/literacybridge/dashboard.properties $reportsDir/importstats/
-else
-  echo "Leaving existing $reportsDir/importStats"
+# Warn if no dashboard.properties file.
+if [ ! -e /opt/literacybridge/dashboard.properties ] && [ ! -e $reportsDir/importStats/dashboard.properties ]; then
+  echo "."
+  echo "******* NOTE *******"
+  echo "There must be a dashboard.properties in either the /opt/literacybridge directory or in"
+  echo "the $reportsDir/importStats directory. This is required by the importStats process."
+  echo "."
 fi
 

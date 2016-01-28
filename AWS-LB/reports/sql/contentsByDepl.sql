@@ -16,6 +16,7 @@ on cp.contentid = cm.contentid
 and cp.project= cm.project
 join categories cat
 on cat.categoryid=cp.categoryid
+and cat.projectcode=cp.project
 JOIN packagesindeployment d
 ON d.contentpackage = cp.contentpackage
 where d.deployment=:'depl'
