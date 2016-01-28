@@ -1,6 +1,6 @@
 #!/bin/sh
 # uncomment next line for script debugging
-set -x
+#set -x
 
 if [ -z "$dropbox" ]; then
   dropbox=~/Dropbox
