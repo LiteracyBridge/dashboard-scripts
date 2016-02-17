@@ -1,4 +1,4 @@
-﻿select pd.project,pd.deployment,pd.contentpackage, 
+COPY (select pd.project,pd.deployment,pd.contentpackage, 
  count(distinct s.talkingbook) as "TBs",
  CASE WHEN datasource=2 THEN sum(countcompleted) ELSE 0 END as stats, 
  CASE WHEN datasource=3 THEN sum(countcompleted) ELSE 0 END as flash,
@@ -12,4 +12,4 @@ join packagesindeployment pd
   and cp.project = pd.project
 where datasource IN (2,3)
 group by pd.project,pd.deployment,pd.contentpackage,datasource
-order by pd.project,pd.deployment,pd.contentpackage,datasource
+order by pd.project,pd.deployment,pd.contentpackage,datasource) TO STDOUT (FORMAT csv, HEADER true);

@@ -1,4 +1,4 @@
-select distinct title,
+COPY (select distinct title,
     packagename, 
     CASE WHEN cat.categoryname LIKE 'General%' THEN substring(cat.categoryname,9) ELSE cat.categoryname END AS Category,
     "order",
@@ -21,4 +21,4 @@ JOIN packagesindeployment d
 ON d.contentpackage = cp.contentpackage
 where cp.contentpackage=:'pkg'
 and cp.project=:'prj'
-order by CASE WHEN cat.categoryname LIKE 'General%' THEN substring(cat.categoryname,9) ELSE cat.categoryname END,"order"
+order by CASE WHEN cat.categoryname LIKE 'General%' THEN substring(cat.categoryname,9) ELSE cat.categoryname END,"order") TO STDOUT (FORMAT csv, HEADER true);

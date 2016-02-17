@@ -1,4 +1,4 @@
-﻿SELECT distinct title, 'd' || d.deployment as "Deployment",d.contentpackage,
+COPY (SELECT distinct title, 'd' || d.deployment as "Deployment",d.contentpackage,
     CASE WHEN cat.categoryname LIKE 'General%' THEN substring(cat.categoryname,9) ELSE cat.categoryname END AS Category,
     "order",
 	format,
@@ -35,4 +35,5 @@ FROM
   ON cat.categoryid = cp.categoryid
   AND cat.projectcode=cp.project  
   WHERE d.deployment = :'depl'
-  ORDER BY effectivecompletions desc--title,deployment
+  ORDER BY effectivecompletions desc --title,deployment
+  ) TO STDOUT (FORMAT csv, HEADER true);

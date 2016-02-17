@@ -1,4 +1,4 @@
-SELECT a.project,deployment,sum(played_seconds_max)/3600 AS hoursplayed,
+COPY (SELECT a.project,deployment,sum(played_seconds_max)/3600 AS hoursplayed,
 	sum(EffectiveCompletions_Max) as EffectiveCompletions,
 	sum(started_max) as started, 
 	sum(quarter_max) as quarter,
@@ -17,4 +17,4 @@ SELECT a.project,deployment,sum(played_seconds_max)/3600 AS hoursplayed,
   ON a.contentpackage=d.contentpackage
   WHERE a.project = :'prj'
   GROUP BY a.project,deployment,d.startdate
-  order by d.startdate
+  order by d.startdate) to STDOUT (FORMAT csv, HEADER true);

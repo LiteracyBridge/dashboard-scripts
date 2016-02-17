@@ -14,5 +14,6 @@ if [ -z "$psql" ]; then
     exit 100
   fi
 fi
+export psql=$psql
 export dbcxn="--host=localhost --port 5432 --username=lb_data_uploader --dbname=dashboard"
 export dropbox=~/tmp

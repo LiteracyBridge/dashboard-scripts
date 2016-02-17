@@ -1,4 +1,4 @@
-SELECT distinct contentstats.project,  
+COPY (SELECT distinct contentstats.project,  
 	d.deployment,
 	contentstats.contentpackage, 
 	packagename, 
@@ -66,4 +66,4 @@ JOIN packagesindeployment d
 ON d.contentpackage = contentstats.contentpackage
 and d.project = contentstats.project
 WHERE contentstats.project= :'prj'
-ORDER BY contentstats.project, d.startdate, packagename
+ORDER BY contentstats.project, d.startdate, packagename) TO STDOUT (FORMAT csv, HEADER true);

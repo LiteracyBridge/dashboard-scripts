@@ -1,4 +1,4 @@
-select cp.project,s.village,cp.contentpackage, count(distinct talkingbook) AS "TBs",sum(countcompleted) as stats,sum(countcompleted)/count(distinct talkingbook) as "ComplPerTB"
+COPY (select cp.project,s.village,cp.contentpackage, count(distinct talkingbook) AS "TBs",sum(countcompleted) as stats,sum(countcompleted)/count(distinct talkingbook) as "ComplPerTB"
 from syncaggregation s
 join contentinpackage cp 
   on s.contentid = cp.contentid
@@ -12,5 +12,5 @@ join packagesindeployment pd
 where datasource =2 
 and cp.project=:'prj'
 group by cp.project,s.village,pd.startdate,cp.contentpackage
-order by cp.project,s.village,pd.startdate,cp.contentpackage
+order by cp.project,s.village,pd.startdate,cp.contentpackage) TO STDOUT (FORMAT csv, HEADER true);
 

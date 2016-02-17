@@ -3,22 +3,22 @@
 #set -x
 
 if [ -z "$psql" ]; then
-  if [ -e /Applications/Postgres.app/Contents/Versions/9.5/bin/psql ]; then
-    psql=/Applications/Postgres.app/Contents/Versions/9.5/bin/psql
-  elif [ -e /Applications/Postgres.app/Contents/Versions/9.4/bin/psql ]; then
-    psql=/Applications/Postgres.app/Contents/Versions/9.4/bin/psql
-  elif [ ! -z $(which psql) ]; then
-    psql=$(which psql)
-  else
-    echo "Can't find psql!"
-    exit 100
-  fi
+    if [ -e /Applications/Postgres.app/Contents/Versions/9.5/bin/psql ]; then
+        psql=/Applications/Postgres.app/Contents/Versions/9.5/bin/psql
+    elif [ -e /Applications/Postgres.app/Contents/Versions/9.4/bin/psql ]; then
+        psql=/Applications/Postgres.app/Contents/Versions/9.4/bin/psql
+    elif [ ! -z $(which psql) ]; then
+        psql=$(which psql)
+    else
+        echo "Can't find psql!"
+        exit 100
+    fi
 fi
 if [ -z "$dbcxn" ]; then
-  dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
+    dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
 fi
 if [ -z "$dropbox" ]; then
-  dropbox=~/Dropbox
+    dropbox=~/Dropbox
 fi
 
 codebasedir="$dropbox/AWS-LB/reports"
@@ -35,26 +35,14 @@ mkdir -p $outputbasedir
 #### RUN CROSS-PROJECT REPORTS
 echo "CROSS-PROJECT REPORTS"
 projectdir=$outputbasedir"/ALL_PROJECTS"
-if [ ! -d "$projectdir" ]; then
-   mkdir $projectdir
-fi   
-for report in `cat $codebasedir/reportsByAll.txt`
- do 
-   echo "  REPORT:$report"
-   #COMMENTING OUT SINCE NOT USING THESE REPORTS (SEE COMMENT BELOW)
-   #if [ ! -d "$sqldir/$report" ]; then
-   #  mkdir $sqldir/$report
-   #fi   
+mkdir -p $projectdir
+for report in `cat $codebasedir/reportsByAll.txt`; do 
+    echo "  REPORT:$report"
 
-   exportdir=$projectdir
-   $psql $dbcxn -A -F "^" -f $sqldir/$report.sql | sed 's/\^/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/' > "$exportdir/$report.csv" 
+    exportdir=$projectdir
+    $psql $dbcxn -A -f $sqldir/$report.sql > "$exportdir/$report.csv" 
 
-   #COMMENTING OUT LINE BELOW SINCE IT DOUBLES EXECUTION TIME JUST TO GET THE EXACT QUERY RUN, WHICH CAN BE DERIVED FROM THE VARIABLES AND .SQL FILE
-   #$psql $dbcxn -e -f $sqldir/$report.sql > "$sqldir/$report/$report.txt" 
 done
-#COMMENTING OUT THE CALL TO FTP REPORTS -- JUST LEAVE CSV FILES IN DROPBOX FOLDER FOR NOW
-#$codebasedir/ftpReports.sh $project $report 
-   
 
 
 
@@ -62,102 +50,71 @@ done
 projects=($($psql $dbcxn -c "SELECT projectcode from projects WHERE id >= 0" -t))
 echo ""
 echo WILL NOW ITERATE THROUGH PROJECTS: ${projects[@]}
-for project in "${projects[@]}"
-  do
-   echo ___________________________________
-   echo ""
-   echo PROJECT:$project
-   projectdir=$outputbasedir"/$project"
-   if [ ! -d "$projectdir" ]; then
-	  mkdir $projectdir
-   fi   
+for project in "${projects[@]}"; do
+    echo ___________________________________
+    echo ""
+    echo PROJECT:$project
+    projectdir=$outputbasedir"/$project"
+    mkdir -p $projectdir
 
-   #### RUN PROJECT REPORTS
-   echo ""
-   echo "  PROJECT REPORTS"
-   for report in `cat $codebasedir/reportsByPrj.txt`
-     do 
-       echo "    REPORT:$report"
- 
-       #COMMENTING OUT SINCE NOT USING THESE REPORTS (SEE COMMENT BELOW)
-       #if [ ! -d "$sqldir/$report" ]; then
-       #  mkdir $sqldir/$report
-       #fi   
- 
-       exportdir=$projectdir"/ALL_DEPLOYMENTS"
-       if [ ! -d "$exportdir" ]; then
-    	  mkdir $exportdir
-       fi   
-       $psql $dbcxn -A -F "^" -f $sqldir/$report.sql -v prj=$project | sed 's/\^/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/' > "$exportdir/$project-$report.csv" 
- 
-       #COMMENTING OUT LINE BELOW SINCE IT DOUBLES EXECUTION TIME JUST TO GET THE EXACT QUERY RUN, WHICH CAN BE DERIVED FROM THE VARIABLES AND .SQL FILE
-       #$psql $dbcxn -e -f $sqldir/$report.sql -v prj=$project > "$sqldir/$report/$project-$report.txt" 
-   done
-   #COMMENTING OUT THE CALL TO FTP REPORTS -- JUST LEAVE CSV FILES IN DROPBOX FOLDER FOR NOW
-   #$codebasedir/ftpReports.sh $project $report 
+    #### RUN PROJECT REPORTS
+    echo ""
+    echo "  PROJECT REPORTS"
+    for report in `cat $codebasedir/reportsByPrj.txt`; do 
+        echo "    REPORT:$report"
 
-   #### ITERATE THROUGH DEPLOYMENTS AND RUN REPORTS
-   echo ""
-   echo "  DEPLOYMENT REPORTS"
-   deployments=($($psql $dbcxn -c "SELECT deployment from (SELECT distinct deployment, startdate from packagesindeployment WHERE project ='$project' ORDER BY startdate DESC, deployment) foo" -t))
-   for report in `cat $codebasedir/reportsByDepl.txt`
-     do 
-       echo "    REPORT:$report"
-       #COMMENTING OUT SINCE NOT USING THESE REPORTS (SEE COMMENT BELOW)
-       #if [ ! -d "$sqldir/$report" ]; then
-       #  mkdir $sqldir/$report
-       #fi   
- 
-       exportdir=$projectdir"/$report"
-       if [ ! -d "$exportdir" ]; then
-    	  mkdir $exportdir
-       fi   
-       if [ -f "$exportdir/$project-$report-all.csv" ]; then
-	       rm "$exportdir/$project-$report-all.csv"
-	   fi
-       for deployment in "${deployments[@]}"
-        do 
-         echo "      DEPLOYMENT:$deployment"
-         $psql $dbcxn -A -F "^" -f $sqldir/$report.sql -v prj=$project -v depl=$deployment | sed 's/\^/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/' > "$exportdir/$project-$report-$deployment.csv" 
+        exportdir=$projectdir"/ALL_DEPLOYMENTS"
+        mkdir -p $exportdir
+        $psql $dbcxn -A -f $sqldir/$report.sql -v prj=$project > "$exportdir/$project-$report.csv" 
 
-         #COMMENTING OUT LINE BELOW SINCE IT DOUBLES EXECUTION TIME JUST TO GET THE EXACT QUERY RUN, WHICH CAN BE DERIVED FROM THE VARIABLES AND .SQL FILE
-         #$psql $dbcxn -e -f $sqldir/$report.sql -v prj=$project -v depl=$deployment > "$sqldir/$report/$project-$report-$deployment.txt" 
+    done
 
-         cat "$exportdir/$project-$report-$deployment.csv" >> "$exportdir/$project-$report-all.csv"
+    #### ITERATE THROUGH DEPLOYMENTS AND RUN REPORTS
+    echo ""
+    echo "  DEPLOYMENT REPORTS"
+    deployments=($($psql $dbcxn -c "SELECT deployment from (SELECT distinct deployment, startdate from packagesindeployment WHERE project ='$project' ORDER BY startdate DESC, deployment) foo" -t))
+    for report in `cat $codebasedir/reportsByDepl.txt`; do 
+        echo "    REPORT:$report"
+
+        exportdir=$projectdir"/$report"
+        mkdir -p $exportdir
+        if [ -f "$exportdir/$project-$report-all.csv" ]; then
+            rm "$exportdir/$project-$report-all.csv"
+        fi
+        # We want to accumulate the header line, the first line, from the first .csv 
+        firstline="+1"
+        for deployment in "${deployments[@]}"; do 
+            echo "      DEPLOYMENT:$deployment"
+            $psql $dbcxn -A -f $sqldir/$report.sql -v prj=$project -v depl=$deployment > "$exportdir/$project-$report-$deployment.csv" 
+
+            # Accumulate the .csv into the 'all' .csv file
+            tail -n $firstline "$exportdir/$project-$report-$deployment.csv" >> "$exportdir/$project-$report-all.csv"
+            # We do not want to accumulate the header line for subsequent .csv files
+            firstline="+2"
         done
-        #COMMENTING OUT THE CALL TO FTP REPORTS -- JUST LEAVE CSV FILES IN DROPBOX FOLDER FOR NOW
-        #$codebasedir/ftpReports.sh $project $report 
-   done
+    done
 
-   #### ITERATE THROUGH PACKAGES AND RUN REPORTS
-   echo "  PACKAGE REPORTS"
-   packages=($($psql $dbcxn -c "SELECT contentpackage from packagesindeployment WHERE project ='$project' ORDER BY startdate DESC,contentpackage" -t))
-   for report in `cat $codebasedir/reportsByPkg.txt`
-     do 
-       echo "    REPORT:$report"
-       #COMMENTING OUT SINCE NOT USING THESE REPORTS (SEE COMMENT BELOW)
-       #if [ ! -d "$sqldir/$report" ]; then
-       #  mkdir $sqldir/$report
-       #fi   
- 
-       exportdir=$projectdir"/$report"
-       if [ ! -d "$exportdir" ]; then
-    	  mkdir $exportdir
-       fi   
-       if [ -f "$exportdir/$project-$report-all.csv" ]; then
-          rm "$exportdir/$project-$report-all.csv"
-	   fi
-       for package in "${packages[@]}"
-        do 
-         echo "      PACKAGE:$package"
-         $psql $dbcxn -A -F "^" -f $sqldir/$report.sql -v prj=$project -v pkg=$package | sed 's/\^/\",\"/g' | sed 's/^/\"/' | sed 's/$/\"/' > "$exportdir/$project-$report-$package.csv" 
+    #### ITERATE THROUGH PACKAGES AND RUN REPORTS
+    echo "  PACKAGE REPORTS"
+    packages=($($psql $dbcxn -c "SELECT contentpackage from packagesindeployment WHERE project ='$project' ORDER BY startdate DESC,contentpackage" -t))
+    for report in `cat $codebasedir/reportsByPkg.txt`; do 
+        echo "    REPORT:$report"
 
-         #COMMENTING OUT LINE BELOW SINCE IT DOUBLES EXECUTION TIME JUST TO GET THE EXACT QUERY RUN, WHICH CAN BE DERIVED FROM THE VARIABLES AND .SQL FILE
-         #$psql $dbcxn -e -f $sqldir/$report.sql -v prj=$project -v pkg=$package > "$sqldir/$report/$project-$report-$package.txt" 
- 
-         cat "$exportdir/$project-$report-$package.csv" >> "$exportdir/$project-$report-all.csv"
+        exportdir=$projectdir"/$report"
+        mkdir -p $exportdir
+        if [ -f "$exportdir/$project-$report-all.csv" ]; then
+            rm "$exportdir/$project-$report-all.csv"
+        fi
+        # We want to accumulate the header line, the first line, from the first .csv 
+        firstline="+1"
+        for package in "${packages[@]}"; do 
+            echo "      PACKAGE:$package"
+            $psql $dbcxn -A -f $sqldir/$report.sql -v prj=$project -v pkg=$package > "$exportdir/$project-$report-$package.csv" 
+
+            # Accumulate the .csv into the 'all' .csv file
+            tail -n $firstline "$exportdir/$project-$report-$package.csv" >> "$exportdir/$project-$report-all.csv"
+            # We do not want to accumulate the header line for subsequent .csv files
+            firstline="+2"
         done
-        #COMMENTING OUT THE CALL TO FTP REPORTS -- JUST LEAVE CSV FILES IN DROPBOX FOLDER FOR NOW
-        #$codebasedir/ftpReports.sh $project $report 
-     done
+    done
 done
