@@ -24,7 +24,7 @@ fi
 
 if [ -z "$core" ]; then
   # This lets us test new versions of core-with-deps.jar more easily.
-  core=$dropbox/LB-software/ACM-install/ACM/software/core-with-deps.jar
+  core=$dropbox/AWS-LB/bin/core-with-deps.jar
 fi
 if [ -z "$acm" ]; then
   # This lets us test new versions of ACM more easily 

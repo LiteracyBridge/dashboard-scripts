@@ -25,6 +25,25 @@ if [ -e $reportsDir/Initial\ Processing\ SQL ]; then
   rm $reportsDir/initialSQL/INITIAL_PROCESSING_POST_INSERT_OF_NEW_STATS.*
 fi
 
+# Check that the required binary (or other) files exist.
+missing=''
+# Testing code.
+#if [ ! -e ./AWS-LB/bin/foo-bar.jar ]; then
+#    missing="${missing} foo-bar.jar"
+#fi
+if [ ! -e ./AWS-LB/bin/core-with-deps.jar ]; then
+    missing="${missing} core-with-deps.jar"
+fi
+# If any missing, prompt user if they want to continue (valid if they're not updated, as nothing's removed below).
+if [ "${missing}" != "" ]; then
+    read -r -p "Missing files:${missing}; are you sure (see bin/README.md) [Y/n]?" response
+    if [[ $response =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        : # do nothing
+    else
+        exit 99 
+    fi
+fi
+
 # Copy new files
 cp -r ./AWS-LB/* $reportsDir/
 
