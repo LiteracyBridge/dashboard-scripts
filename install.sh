@@ -47,12 +47,4 @@ fi
 # Copy new files
 cp -r ./AWS-LB/* $reportsDir/
 
-# Warn if no dashboard.properties file.
-if [ ! -e /opt/literacybridge/dashboard.properties ] && [ ! -e $reportsDir/importStats/dashboard.properties ]; then
-  echo "."
-  echo "******* NOTE *******"
-  echo "There must be a dashboard.properties in either the /opt/literacybridge directory or in"
-  echo "the $reportsDir/importStats directory. This is required by the importStats process."
-  echo "."
-fi
 

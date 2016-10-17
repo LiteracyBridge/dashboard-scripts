@@ -6,7 +6,7 @@
 
 #CONFIGURATION
 # uncomment next line for script debugging
-#set -x
+# set -x
 
 if [ -z "$psql" ]; then
     if [ -e /Applications/Postgres.app/Contents/Versions/9.5/bin/psql ]; then
@@ -27,7 +27,7 @@ if [ -z "$dropbox" ]; then
     dropbox=~/Dropbox
 fi
 if [ -z "$acm" ]; then
-    acm=acm.jar
+    acm=$dropbox/LB-software/ACM-install/ACM/software
 fi
 echo "Processing stats with dropbox:$dropbox, psql:$psql, dbcxn:$dbcxn"
 echo "acm: $acm"
@@ -43,12 +43,24 @@ for i in "${projects[@]}";  do
     project_spaced_list=" $project_spaced_list ACM-$i"
 done
 
-# Move into Java directory with lib & resources subdirectory
-cd $dropbox/LB-software/ACM-install/ACM/software
 echo "Exporting all content metadata and ACMs languages & categories to $exportdir from these ACMs: $project_spaced_list"
 rm $exportdir/*
 mkdir -p $exportdir
-java -Djava.awt.headless=true -cp $acm:lib/* org.literacybridge.acm.tools.DBExporter $exportdir $project_spaced_list
+java -Djava.awt.headless=true -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.tools.DBExporter $exportdir $project_spaced_list
+
+indent() { sed 's/^/  /'; }
+function doSqlCommand() {
+  cmd=$1
+  echo "PSQL: ${cmd}"
+  # run the command, and indent the output by two spaces
+  ${psql} ${dbcxn} -c "${cmd}" 2>psql.err | indent
+  rc=${PIPESTATUS[0]}
+  if [ $rc -ne 0 ]; then
+      echo "*** error ($rc) running '${cmd}'"
+      cat psql.err | indent
+      # send email here...
+  fi
+}
 
 # For each project, import the following data (just exported above):
 #     content metadata
@@ -61,28 +73,24 @@ java -Djava.awt.headless=true -cp $acm:lib/* org.literacybridge.acm.tools.DBExpo
 #     content in each package
 # First delete the same data from the database to avoid duplicate or primary key conflict.
 for i in "${projects[@]}"; do
-    # Only delete data if import file exists.
+    echo "\n============= Update metadata tables for $i ============="
+
+    # Recreate contentmetadata2 if export file exists.
     if [ -f $exportdir/$i-metadata.csv ]; then
-        echo DELETE FROM contentmetadata2 WHERE project =$i
-        $psql $dbcxn -c "DELETE FROM contentmetadata2 WHERE project ='$i'"
-        echo importing metadata for $i into AWS
-        $psql $dbcxn -c "COPY contentmetadata2 FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-metadata.csv
+        doSqlCommand "DELETE FROM contentmetadata2 WHERE project ='$i'"
+        doSqlCommand "COPY contentmetadata2 FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-metadata.csv
     fi
 
-    # Only delete data if import file exists.
+    # Recreate categories if export file exists.
     if [ -f $exportdir/$i-categories.csv ]; then
-        echo DELETE FROM categories WHERE projectcode =$i
-        $psql $dbcxn -c "DELETE FROM categories WHERE projectcode ='$i'"
-        echo importing categories for $i into AWS
-        $psql $dbcxn -c "COPY categories FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-categories.csv
+        doSqlCommand "DELETE FROM categories WHERE projectcode ='$i'"
+        doSqlCommand "COPY categories FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-categories.csv
     fi
 
-    # Only delete data if import file exists.
+    # Recreate languages if export file exists.
     if [ -f $exportdir/$i-languages.csv ]; then
-        echo DELETE FROM languages WHERE projectcode =$i
-        $psql $dbcxn -c "DELETE FROM languages WHERE projectcode ='$i'"
-        echo importing languages for $i into AWS
-        $psql $dbcxn -c "COPY languages FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-languages.csv
+        doSqlCommand "DELETE FROM languages WHERE projectcode ='$i'"
+        doSqlCommand "COPY languages FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-languages.csv
     fi
 
     # get latest distribution for each project and then CSV files
@@ -114,26 +122,19 @@ for i in "${projects[@]}"; do
     mv "$csvDir/packagesindeployment-nonullquote.csv" "$packagesInDeploymentFile"
 
     if [ -f $packagesInDeploymentFile ]; then
-        echo "DELETE FROM packagesindeployment WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
-        $psql $dbcxn -c "DELETE FROM packagesindeployment WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
-        echo importing packagesindeployment for $i into AWS
-        $psql $dbcxn -c "COPY packagesindeployment FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $packagesInDeploymentFile
-        echo updating packagesindeployment with distribution label $distribution_w_version
-        $psql $dbcxn -c "UPDATE packagesindeployment SET distribution='$distribution_w_version' WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
+        doSqlCommand "DELETE FROM packagesindeployment WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
+        doSqlCommand "COPY packagesindeployment FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $packagesInDeploymentFile
+        doSqlCommand "UPDATE packagesindeployment SET distribution='$distribution_w_version' WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
     fi
 
     if [ -f $categoriesInPackagesFile ]; then
-        echo "DELETE FROM categoriesinpackage WHERE project ='$i' AND UPPER(contentpackage) IN ($packages)"
-        $psql $dbcxn -c "DELETE FROM categoriesinpackage WHERE project ='$i' AND UPPER(contentpackage) IN ($packages)"
-        echo importing categoriesinpackage for $i into AWS
-        $psql $dbcxn -c "COPY categoriesinpackage FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < "$categoriesInPackagesFile" 
+        doSqlCommand "DELETE FROM categoriesinpackage WHERE project ='$i' AND UPPER(contentpackage) IN ($packages)"
+        doSqlCommand "COPY categoriesinpackage FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < "$categoriesInPackagesFile" 
     fi
 
     if [ -f $contentInPackagesFile ]; then
-        echo "DELETE FROM contentinpackage WHERE project ='$i' AND UPPER(contentpackage) IN ($packages)"
-        $psql $dbcxn -c "DELETE FROM contentinpackage WHERE project ='$i' AND UPPER(contentpackage) IN ($packages)"
-        echo importing contentinpackage for $i into AWS
-        $psql $dbcxn -c "COPY contentinpackage FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $contentInPackagesFile
+        doSqlCommand "DELETE FROM contentinpackage WHERE project ='$i' AND UPPER(contentpackage) IN ($packages)"
+        doSqlCommand "COPY contentinpackage FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $contentInPackagesFile
     fi
 
     echo .

@@ -27,8 +27,7 @@ if [ -z "$core" ]; then
   core=$dropbox/AWS-LB/bin/core-with-deps.jar
 fi
 if [ -z "$acm" ]; then
-  # This lets us test new versions of ACM more easily 
-  acm=acm.jar
+    acm=$dropbox/LB-software/ACM-install/ACM/software
 fi
 
 # Depending on our Dropbox account, the incoming stats may be in one of two different locations.
@@ -45,17 +44,16 @@ exportdir=$dropbox/collected-data-processed/
 importdir=${importdir%/}
 exportdir=${exportdir%/}
 
-# Move into Java directory with lib & resources subdirectory
-pushd $dropbox/LB-software/ACM-install/ACM/software
-
 echo "Zipping stats and then clearing $importdir."
-newStatsDir=$(java -cp $acm:lib/* org.literacybridge.acm.utils.MoveStats $importdir $exportdir) 
-echo "Zip files are now in $newStatsDir"
-popd
-
-# We're in the importStats directory, which contains a file named dashboard.properties that controls
-# the database connection.
-if [ -d "$newStatsDir" ]; then
-  time java -jar $core -f -z $newStatsDir
+newStatsDir=$(java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats $importdir $exportdir) 
+if [ $? -eq 0 ]; then
+    echo "Zip files are now in $newStatsDir"
+    # We're in the importStats directory, which contains a file named dashboard.properties that controls
+    # the database connection.
+    if [ -d "$newStatsDir" ]; then
+      time java -jar $core -f -z $newStatsDir
+    fi
+else
+    echo "No files to import"
 fi
 

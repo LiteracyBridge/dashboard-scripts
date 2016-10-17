@@ -1,0 +1,5 @@
+# Run cronjob.sh at 0400 utc
+0 4 * * * /home/ec2-user/cron/cronjob.sh
+
+# Run cronjob every minute, for testing
+#* * * * * /home/ec2-user/cron/cronjob.sh
