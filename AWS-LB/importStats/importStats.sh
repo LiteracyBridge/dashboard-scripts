@@ -45,13 +45,45 @@ importdir=${importdir%/}
 exportdir=${exportdir%/}
 
 echo "Zipping stats and then clearing $importdir."
-newStatsDir=$(java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats $importdir $exportdir) 
+# This date format is used all over the LB software; keep it for compatability. 
+timestamp=$(date -u +%Yy%mm%dd%Hh%Mm%Ss)
+newStatsDir=${exportdir}/${timestamp}
+echo "Will move any stats and/or user feedback to ${newStatsDir}"
+time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats ${importdir} ${exportdir} ${timestamp}
 if [ $? -eq 0 ]; then
     echo "Zip files are now in $newStatsDir"
     # We're in the importStats directory, which contains a file named dashboard.properties that controls
     # the database connection.
     if [ -d "$newStatsDir" ]; then
-      time java -jar $core -f -z $newStatsDir
+        # Capture a list of all the files to be imported
+        ls -lR ${newStatsDir}>${newStatsDir}/files.log
+        if [ -e acm.log ]; then
+            # Log file from MoveStats above.
+            mv acm.log ${newStatsDir}/movestats.log
+        fi
+        if [ -d "${newStatsDir}/userrecordings" ]; then
+            FB=org.literacybridge.acm.utils.FeedbackImporter
+            REC=${newStatsDir}/userrecordings
+            REC_PROCESSED=${newStatsDir}/recordingsprocessed
+            REC_SKIPPED=${newStatsDir}/recordingsskipped
+            RPT=${newStatsDir}/feedbackreport.html
+            mkdir ${REC_PROCESSED}
+            mkdir ${REC_SKIPPED}
+            echo " User feedback from: ${REC}"
+            echo "       Processed to: ${REC_PROCESSED}"
+            echo "         Skipped to: ${REC_SKIPPED}"
+            echo java -cp ${acm}/acm.jar:${acm}/lib/* ${FB} ${REC} --processed ${REC_PROCESSED} --skipped ${REC_SKIPPED} --report ${RPT}
+            java -cp ${acm}/acm.jar:${acm}/lib/* ${FB} ${REC} --processed ${REC_PROCESSED} --skipped ${REC_SKIPPED} --report ${RPT}
+            ${email} --body ${RPT} --subject "User feedback imported ${newStatsDir##*/}"
+            if [ -e acm.log ]; then
+                # Log file from FeedbackImporter
+                mv acm.log ${newStatsDir}/feedbackimporter.log
+            fi
+        fi
+        time java -jar $core -f -z $newStatsDir
+        if [ -e dashboard_core.log ]; then
+            mv dashboard_core.log ${newStatsDir}/
+        fi
     fi
 else
     echo "No files to import"
