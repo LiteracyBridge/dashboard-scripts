@@ -29,6 +29,9 @@ fi
 if [ -z "$acm" ]; then
     acm=$dropbox/LB-software/ACM-install/ACM/software
 fi
+if [ -z "$email" ]; then
+    email=${dropbox}/AWS-LB/bin/sendses.py
+fi
 
 # Depending on our Dropbox account, the incoming stats may be in one of two different locations.
 if [ -d $dropbox/outbox/stats ]; then
