@@ -26,6 +26,8 @@ outputdir="${dropbox}/DashboardReports"
 sqldir="${codebasedir}/sql"
 helpers="${codebasedir}/reportHelpers/*.sql"
 
+PREFIX=''
+
 #
 # Main function (call is at end of file)
 function main() {
@@ -43,7 +45,7 @@ function main() {
         makeDeploymentReports ${project}
         makePackageReports ${project}
 
-        makeReportsWithHelpers reportsByPrj ${projectdir} -v prj=${project}
+        (PREFIX="${project}-"; makeReportsWithHelpers reportsByPrj ${projectdir} -v prj=${project})
     done
 }
 
@@ -160,7 +162,7 @@ function makeReportsWithHelpers() {
         fn=${sql%.*}
         fn=${fn##*/}
         echo "    REPORT:${fn}"
-        makeReportWithHelpers ${sql} ${csvdir}/${fn}.csv ${values}
+        makeReportWithHelpers ${sql} ${csvdir}/${PREFIX}${fn}.csv ${values}
     done
 }
 

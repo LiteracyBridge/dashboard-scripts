@@ -37,7 +37,7 @@
       di.community
 )
 
-  -- Report of language, #communities, #tbs, per deployment per package
+  -- Report of language, #communities, #tbs, per package
   , deployments_by_package AS (
     SELECT DISTINCT
       di.project,
@@ -69,6 +69,20 @@
     GROUP BY dp.project, dp.deploymentnumber
     ORDER BY dp.deploymentnumber
 )
+  
+  -- Report of #tbs, per community per package
+  , deployments_by_community AS (
+    SELECT DISTINCT
+      di.project,
+      di.deploymentnumber,
+      di.packagename,
+      di.community,
+      SUM(di.deployed_tbs)      AS deployed_tbs
+    FROM deployment_info di
+    GROUP BY di.project, di.deploymentnumber, di.packagename, di.community
+    ORDER BY project, community, deploymentnumber, packagename
+)
+
 
   -- Report the last 4 deployments per project
   , deployments_recent_by_project AS (
