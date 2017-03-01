@@ -47,6 +47,21 @@ function main() {
 
         (PREFIX="${project}-"; makeReportsWithHelpers reportsByPrj ${projectdir} -v prj=${project})
     done
+
+    distributeReports
+}
+
+# Copy reports to the ACM- directory. This makes them accessible to partners like CBCC.
+function distributeReports() {
+    local projects="CBCC"
+
+    for proj in ${projects} ; do
+        echo "Distributing reports for ${proj}"
+        local reportdir=$(getProjectDir ${proj})
+        local acmdir=${dropbox}/ACM-${proj}/DashboardReports
+        mkdir -p ${acmdir}
+        cp -r ${reportdir}/* ${acmdir}
+    done
 }
 
 function getProjectDir() {

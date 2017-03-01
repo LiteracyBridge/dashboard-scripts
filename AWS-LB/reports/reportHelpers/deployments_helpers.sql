@@ -83,6 +83,16 @@
     ORDER BY project, community, deploymentnumber, packagename
 )
 
+  -- Report of # packages, per talkingbook
+  , deployments_by_talkingbook AS (
+    SELECT DISTINCT project, 
+        community, 
+        talkingbook, 
+        count(DISTINCT packagename) AS num_packages
+    FROM update_operation_info
+    GROUP BY project, community, talkingbook
+    ORDER BY project, community, talkingbook
+)
 
   -- Report the last 4 deployments per project
   , deployments_recent_by_project AS (

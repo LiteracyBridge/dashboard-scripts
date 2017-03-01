@@ -44,7 +44,6 @@ if [ "${missing}" != "" ]; then
     fi
 fi
 
-# Copy new files
-cp -r ./AWS-LB/* $reportsDir/
-
+# Copy new files. Rsync -va will list only the files copied, and copy only changed files.
+rsync -av --exclude .gitignore ./AWS-LB/* ${reportsDir}/
 
