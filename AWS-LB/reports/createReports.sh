@@ -48,6 +48,8 @@ function main() {
         (PREFIX="${project}-"; makeReportsWithHelpers reportsByPrj ${projectdir} -v prj=${project})
     done
 
+    # final "report" is current timestamp.
+    echo $(date)>${outputdir}/reports_date.txt
     distributeReports
 }
 
@@ -62,6 +64,13 @@ function distributeReports() {
         mkdir -p ${acmdir}
         cp -r ${reportdir}/* ${acmdir}
     done
+
+    # sync newly created reports to s3. Ignore the one directory, and anything hidden.
+    local s3dest="s3://dashboard-lb-stats/data"
+    local excludes='--exclude="NEW-2016-02-22/*" --exclude=".*"'
+    (cd ${outputdir}; aws s3 sync . ${s3dest} --delete ${excludes}) >report.txt
+    cat report.txt | tr '\r' '\n' | sed '/^Completed.*remaining/d'>report.filtered
+    ${dropbox}/AWS-LB/bin/sendses.py --subject 'Reports updates to s3' --body report.filtered
 }
 
 function getProjectDir() {
