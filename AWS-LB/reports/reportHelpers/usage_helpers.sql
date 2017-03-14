@@ -269,6 +269,34 @@
     ORDER BY project, deploymentnumber
 )
 
+ -- Report usage at the talking book level. 
+ , usage_by_talkingbook AS (
+    SELECT DISTINCT
+      ci.project,
+      ci.community,
+      ci.contentpackage,
+      ci.talkingbook,
+      COUNT(DISTINCT(contentid))         AS num_messages,
+      ROUND(SUM(duration_seconds)/60.0, 1)    AS duration_minutes,
+      ROUND(SUM(played_seconds)/60.0, 1) AS played_minutes,
+      SUM(effective_completions)         AS effective_completions,
+      SUM(completions)                   AS completions,
+      MAX(package_tbs_used)              AS num_package_tbs
+    FROM
+      usage_info ci
+      JOIN package_tbs_used ptb
+        ON ptb.project=ci.project AND ptb.contentpackage=ci.contentpackage
+    GROUP BY
+      ci.project,
+      ci.community,
+      ci.contentpackage,
+      ci.talkingbook
+    ORDER BY project, 
+      community, 
+      contentpackage,
+      played_minutes DESC 
+ )
+
   -- Report the last 4 usage counts for every project
   , usage_recent_by_project AS (
     SELECT

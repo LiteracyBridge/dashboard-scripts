@@ -65,12 +65,27 @@ function distributeReports() {
         cp -r ${reportdir}/* ${acmdir}
     done
 
+    # If there exists a ~/dashboardreports directory, copy any deltas to it, then 
     # sync newly created reports to s3. Ignore the one directory, and anything hidden.
-    local s3dest="s3://dashboard-lb-stats/data"
-    local excludes='--exclude="NEW-2016-02-22/*" --exclude=".*"'
-    (cd ${outputdir}; aws s3 sync . ${s3dest} --delete ${excludes}) >report.txt
-    cat report.txt | tr '\r' '\n' | sed '/^Completed.*remaining/d'>report.filtered
-    ${dropbox}/AWS-LB/bin/sendses.py --subject 'Reports updates to s3' --body report.filtered
+    local staging=~/dashboardreports
+    if [ -d ${staging} ]; then
+        local s3dest="s3://dashboard-lb-stats/data"
+        local excludes='--exclude="NEW-2016-02-22/***" --exclude=".*" --exclude="*.sh"'
+
+        # copy from dropbox those files whose contents have changed (--update -c)
+        printf "\n\nReports distributed at $(date)\n\nrsync:\n" >report.txt
+        rsync --update -cmvr ${excludes} "${outputdir}/*" ${staging}/ >>report.txt
+        
+        # then sync changes to s3
+        printf "\n\naws s3 sync:\n" >>report.txt
+        (cd ${staging}; aws s3 sync . ${s3dest} --delete) >>report.txt
+
+        # clean up the s3 debugging spew, and send email
+        cat report.txt | tr '\r' '\n' | sed '/^Completed.*remaining/d'>report.filtered
+        ${dropbox}/AWS-LB/bin/sendses.py --subject 'Reports updates to s3' --body report.filtered
+    else
+        echo "No ~/dashboardreports, not copying reports"
+    fi
 }
 
 function getProjectDir() {
