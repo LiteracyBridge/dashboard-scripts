@@ -18,11 +18,7 @@ if [ -z "${dbcxn}" ]; then
     dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
 fi
 if [ -z "${dropbox}" ]; then
-    if [ -d ~/Dropbox\ \(Literacy\ Bridge\) ]; then
-        dropbox=~/Dropbox\ \(Literacy\ Bridge\)
-    else
-        dropbox=~/Dropbox
-    fi
+    dropbox=~/Dropbox
     echo "dropbox in ${dropbox}"
 fi
 
@@ -75,11 +71,10 @@ function distributeReports() {
     local staging=~/dashboardreports
     if [ -d ${staging} ]; then
         local s3dest="s3://dashboard-lb-stats/data"
-        local excludes='--exclude="NEW-2016-02-22/***" --exclude=".*" --exclude="*.sh"'
 
         # copy from dropbox those files whose contents have changed (--update -c)
         printf "\n\nReports distributed at $(date)\n\nrsync:\n" >report.txt
-        rsync --update -cmvr ${excludes} "${outputdir}" "${staging}" >>report.txt
+        rsync --update -cmvr --delete --delete-excluded  --filter=". stagingFilter" "${outputdir}/" "${staging}" >>report.txt
         
         # then sync changes to s3
         printf "\n\naws s3 sync:\n" >>report.txt

@@ -45,6 +45,7 @@
       msg.deployment,
       msg.deploymentnumber,
       MAX(pkg.num_packages)                  AS num_packages,
+      MAX(pkg.num_languages)                 AS num_languages,    
       MAX(cat.num_categories)                AS num_categories,
       COUNT(DISTINCT msg.contentid)          AS num_messages
       ---,COUNT(msg.contentid) as all_messages --debugging, should be =num_messages
@@ -65,6 +66,7 @@
               project,
               deployment,
               deploymentnumber,
+              COUNT(DISTINCT languagecode) AS num_languages,            
               COUNT(DISTINCT contentpackage) AS num_packages
             FROM production_info
             GROUP BY project, deployment, deploymentnumber
