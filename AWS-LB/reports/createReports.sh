@@ -26,19 +26,20 @@ codebasedir="${dropbox}/AWS-LB/reports"
 outputdir="${dropbox}/DashboardReports"
 sqldir="${codebasedir}/sql"
 helpers="${codebasedir}/reportHelpers/*.sql"
-
-PREFIX=''
+projectQueries="${codebasedir}/projectQueries.list"
+globalQueries="${codebasedir}/globalQueries.list"
 
 #
 # Main function (call is at end of file)
 function main() {
     makeGlobalReports
-    makeReportsWithHelpers reportsGlobal ${outputdir}
 
-    local projects=($(${psql} ${dbcxn} -c "SELECT projectcode from projects WHERE id >= 0" -t))
+    printf "project,path\n" > "${outputdir}/project_list.csv"
+    projects=($(${psql} ${dbcxn} -c "SELECT projectcode from projects WHERE id >= 0" -t))
     echo WILL NOW ITERATE THROUGH PROJECTS: ${projects[@]}
     for project in "${projects[@]}"; do
         printf "___________________________________\n\nPROJECT:${project}\n"
+        printf "%s,%s/\n" ${project} ${project} >>"${outputdir}/project_list.csv"
         projectdir=${outputdir}"/${project}"
         mkdir -p ${projectdir}
 
@@ -46,8 +47,9 @@ function main() {
         makeDeploymentReports ${project}
         makePackageReports ${project}
 
-        (PREFIX="${project}-"; makeReportsWithHelpers reportsByPrj ${projectdir} -v prj=${project})
     done
+
+    runBatchedQueries
 
     # final "report" is current timestamp.
     echo $(date)>${outputdir}/reports_date.txt
@@ -56,6 +58,7 @@ function main() {
 
 # Copy reports to the ACM- directory. This makes them accessible to partners like CBCC.
 function distributeReports() {
+    echo 'DISTRIBUTING REPORTS'
     local projects="CBCC"
 
     for proj in ${projects} ; do
@@ -184,48 +187,66 @@ function makeReportsWithItems() {
 }
 
 #
-# Iterates *.sql in a directory, invokes psql on those files.
-# Injects global helpers before the sql
-# Writes output to a given directory
+# This function actually runs psql to process the query. All of the tricky stuff (like
+# building the queries and helpers) is done elsewhere.
 #
-# param sql directory - queries are here
-# param output directory - write output here, named like query.csv
-# rest - additional arguments to psql
-function makeReportsWithHelpers() {
-    local sqldir=$1&&shift
-    local csvdir=$1&&shift
-    local values="${@}"
+function runBatchedQueries() {
+echo 'BATCHED PSQL REPORTS'
+$psql $dbcxn <<EndOfQuery >log.txt
+\\timing
+\\set ECHO queries
+$(cat ${helpers})
 
-    for sql in $(ls ${sqldir}/*.sql); do
-        # bash re, drops ".sql" or ".SQL", etc.
-        fn=${sql%.*}
-        fn=${fn##*/}
-        echo "    REPORT:${fn}"
-        makeReportWithHelpers ${sql} ${csvdir}/${PREFIX}${fn}.csv ${values}
+$(makePerProjectQueries)
+
+$(makeGlobalQueries)
+
+EndOfQuery
+}
+
+# Make the report name for query and optionsl project
+function rptName() {
+    local query=${1}&&shift
+    local project=${1}&&shift
+
+    printf "${outputdir}/"
+    if [ "${project}" != "" ]; then
+        printf "${project}/${project}-"
+    fi
+    printf "${query}.csv"
+}
+
+#
+# Make the queries for the per-project reports.
+#
+# Return the queries as the output, suitable to insert into a psql script.
+#
+makePerProjectQueries() {
+    local queries=($(cat ${projectQueries}))
+    for project in "${projects[@]}"; do
+        mkdir -p ${outputdir}/${project}
+        printf " --  PROJECT: ${project}\n"
+        for query in "${queries[@]}"; do
+            printf " \\COPY (select * from %s where project='%s')" ${query} ${project}
+            printf "  TO '$(rptName ${query} ${project})' (FORMAT csv, HEADER true);\n"
+        done
     done
 }
 
 #
-# Runs one report, injecting helper sql files
+# Make the queries for the non per-project (ie, global) reports.
 #
-# param sql - query to be run
-# param csv - csv file to be written with results
-# rest - additional args to psql
+# Return the queries as the output, suitable to insert into a psql script.
 #
-# helpers - global variable pointing to helper sql to be injected. These
-# may contain ", sub_query AS (SELECT ...)" entries.
-function makeReportWithHelpers() {
-    local sql=$1&&shift
-    local csv=$1&&shift
-    local values="${@}"
-    $psql $dbcxn -A ${values}  <<EndOfQuery >${csv}
-        COPY (
-        WITH dummy_view AS (SELECT 0)
-        $(cat ${helpers})
-        $(cat ${sql})
-        ) TO STDOUT(FORMAT csv, HEADER true);
-EndOfQuery
+function makeGlobalQueries() {
+    local queries=($(cat ${globalQueries}))
+    printf " --  GLOBAL\n"
+    for query in "${queries[@]}"; do
+        printf " \\COPY (select * from %s)" ${query}
+        printf "  TO '$(rptName ${query})' (FORMAT csv, HEADER true);\n"
+    done
 }
+
 
 
 # Now that everything has been declared, run it.

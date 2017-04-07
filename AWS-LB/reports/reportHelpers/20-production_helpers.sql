@@ -3,12 +3,13 @@
 --
 
 -- Content deployed, with all the columns we care about
-, production_info AS (
+SELECT * INTO TEMPORARY TABLE production_info FROM (
     SELECT
       d.project,
       d.deployment,
       d.deploymentnumber,
-      pid.contentpackage,
+      pid.startdate,
+      pid.contentpackage AS package,
       pid.languagecode,
       l.language,
       cip.categoryid,
@@ -30,20 +31,22 @@
       JOIN categories c ON c.projectcode = d.project AND c.categoryid = cip.categoryid
       -- Add the content's title, duration, and format
       JOIN contentmetadata2 cm ON cm.project = d.project AND cm.contentid = cip.contentid
-)
+) prod_info;
 
-  -- In the queries below, there is not a strict hierarchy of deployment/package/category/message; messages
-  -- appear in multiple deployments, multiple packages, and sometimes in multiple categories in a package.
-  -- So, #messages in a package IS NOT the same as the sum of #messages in categories in a package. And
-  -- therefore, we do the aggregation independently for things that can appear, or not, independently
-  -- within some container grouping (like deployment, or package).
+  -- In the queries below, there is not a strict hierarchy of deployment/package/
+  -- category/message; messages appear in multiple deployments, multiple packages,
+  -- and sometimes in multiple categories in a package.  So, #messages in a package 
+  -- IS NOT the same as the sum of #messages in categories in a package. And
+  -- therefore, we do the aggregation independently for things that can appear, 
+  -- or not, independently within some container grouping (like deployment, or package).
 
   -- Production #packages, #messages, duration, per deployment
-  , production_by_deployment AS (
+SELECT * INTO TEMPORARY TABLE production_by_deployment FROM (
     SELECT DISTINCT
       msg.project,
       msg.deployment,
       msg.deploymentnumber,
+      msg.startdate,
       MAX(pkg.num_packages)                  AS num_packages,
       MAX(pkg.num_languages)                 AS num_languages,    
       MAX(cat.num_categories)                AS num_categories,
@@ -56,10 +59,11 @@
             project,
             deployment,
             deploymentnumber,
+            startdate,
             contentid,
             duration_sec
           FROM production_info
-          GROUP BY project, deployment, deploymentnumber, contentid, duration_sec
+          GROUP BY project, deployment, deploymentnumber, startdate, contentid, duration_sec
          ) msg
       -- Distinct packages
       JOIN (SELECT DISTINCT
@@ -67,7 +71,7 @@
               deployment,
               deploymentnumber,
               COUNT(DISTINCT languagecode) AS num_languages,            
-              COUNT(DISTINCT contentpackage) AS num_packages
+              COUNT(DISTINCT package) AS num_packages
             FROM production_info
             GROUP BY project, deployment, deploymentnumber
            ) pkg ON pkg.project = msg.project AND pkg.deploymentnumber = msg.deploymentnumber
@@ -80,17 +84,18 @@
             FROM production_info
             GROUP BY project, deployment, deploymentnumber
            ) cat ON cat.project = msg.project AND cat.deploymentnumber = msg.deploymentnumber
-    GROUP BY msg.project, msg.deployment, msg.deploymentnumber
-    ORDER BY project, deploymentnumber
-)
+    GROUP BY msg.project, msg.deployment, msg.deploymentnumber, msg.startdate
+    ORDER BY project, startdate 
+) prod_by_depl;
 
   -- Production #categories, #messages, duration, per deployment per package
-  , production_by_package AS (
+SELECT * INTO TEMPORARY TABLE production_by_package FROM (
     SELECT DISTINCT
       msg.project,
       msg.deployment,
       msg.deploymentnumber,
-      msg.contentpackage,
+      msg.startdate,
+      msg.package,
       msg.languagecode,
       msg.language,
       MAX(cat.num_categories)                AS num_categories,
@@ -104,7 +109,8 @@
          project,
          deployment,
          deploymentnumber,
-         contentpackage,
+         startdate,
+         package,
          languagecode,
          language,
          contentid,
@@ -114,7 +120,8 @@
          project,
          deployment,
          deploymentnumber,
-         contentpackage,
+         startdate,
+         package,
          languagecode,
          language,
          contentid,
@@ -126,30 +133,32 @@
          project,
          deployment,
          deploymentnumber,
-         contentpackage,
+         package,
          COUNT(DISTINCT categoryid) AS num_categories
        FROM production_info
-       GROUP BY project, deployment, deploymentnumber, contentpackage
+       GROUP BY project, deployment, deploymentnumber, package
       ) cat
         ON cat.project = msg.project AND cat.deployment = msg.deployment AND
-           cat.contentpackage = msg.contentpackage
+           cat.package = msg.package
     GROUP BY
       msg.project,
       msg.deployment,
       msg.deploymentnumber,
-      msg.contentpackage,
+      msg.startdate,
+      msg.package,
       msg.languagecode,
       msg.language
-    ORDER BY project, deploymentnumber, contentpackage
-)
+    ORDER BY project, startdate, package
+) prod_by_pkg;
 
   -- Production #messages, duration per deployment per package(language) per category
-  , production_by_category AS (
+SELECT * INTO TEMPORARY TABLE production_by_category FROM (
     SELECT DISTINCT
       project,
       deployment,
       deploymentnumber,
-      contentpackage,
+      startdate,
+      package,
       languagecode,
       language,
       categoryid,
@@ -163,11 +172,12 @@
       project,
       deployment,
       deploymentnumber,
-      contentpackage,
+      startdate,
+      package,
       languagecode,
       language,
       categoryid,
       categoryname
-    ORDER BY project, deploymentnumber, contentpackage, categoryid
-)
+    ORDER BY project, deploymentnumber, startdate, package, categoryid
+) prod_by_pkg;
 
