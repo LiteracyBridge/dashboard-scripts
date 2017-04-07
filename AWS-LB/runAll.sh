@@ -28,3 +28,10 @@ echo .
 pushd reports
 ./createReports.sh
 popd
+
+echo "=========================================================================================="
+echo User Feedback progress reports
+echo .
+pushd ufReports
+./extract.sh
+popd
