@@ -14,7 +14,7 @@ usage = '''
 quotable = re.compile(".*[- ]")
 
 # Filter for uncategorized category codes.
-uncategorized_filter = re.compile("^9-0")
+uncategorized_filter = re.compile("^9-0|^9$")
 # Filter for categorized category codes
 category_filter = re.compile("90-.*")
 # List of categories we care about
@@ -58,19 +58,31 @@ def enquote(string):
     return tmp
 
 # Read the list of categories from a file. Assumes category-code is first column.
-def readCategories(filename):
+def readCategories(filename, summary=None):
     global categories
+    # If we're appending to a summaries file, first get the categories (in the existing order) already in use.
+    if summary:
+        if os.path.exists(summary):
+            summaryf = open(summary, 'rb')
+            summarycsv = csv.reader(summaryf, delimiter=',')
+            row = summarycsv.next()
+            # skip date, other, uncategorized, categorized
+            categories = row[4:]
+
+
     file = open(filename, 'rb')
     csvfile = csv.reader(file, delimiter=',')
     for row in csvfile:
         if csvfile.line_num > 1:
             category = row[0]
-            if category_filter.match(category) or uncategorized_filter.match(category):
+            # If we want only feedback categories, add this: and (category_filter.match(category) or uncategorized_filter.match(category))
+            if not category in categories:
                 categories.append(category)
 
 # Read and process the metadata
 def readFile(filename, summary=None, details=None):
     global categories, column_label, column_index
+    other = 0
     categorized = 0
     uncategorized = 0
     sums = [0 for ix in range(len(categories))]
@@ -86,13 +98,6 @@ def readFile(filename, summary=None, details=None):
             if details:
                 detailsf = open(details, 'wb')
                 detailsf.write( ",".join(column_label[col] for col in columns) + "," + ",".join(enquote(cat) for cat in categories)  + '\n')
-            # Summary requested? Append to any existing file.
-            if summary:
-                if os.path.exists(summary):
-                    summaryf = open(summary, 'ab')
-                else:
-                    summaryf = open(summary, 'wb')
-                    summaryf.write( 'date,uncategorized,categorized,' + ",".join(enquote(cat) for cat in categories)  + '\n')
         else:
             # Subsequent lines: count the category(ies) for the feedback.
             buckets = [0 for ix in range(len(categories))]
@@ -102,12 +107,16 @@ def readFile(filename, summary=None, details=None):
                     # "categorized" or "uncategorized"?
                     if uncategorized_filter.match(col):
                         uncategorized += 1
-                    else:
+                    elif category_filter.match(col):
                         categorized += 1
+                    else:
+                        other += 1
                     while len(col) > 0 and col in categories:
                         # Count the category, and all the parents, like 90-12-2-3, 90-12-2, 90-12, 90
                         catix = categories.index(col)
                         buckets[catix] += 1
+                        # Remove if we also want to count in parent categories.
+                        break
                         dash = col.rfind('-')
                         if dash >= 0:
                             col = col[:dash]
@@ -121,10 +130,16 @@ def readFile(filename, summary=None, details=None):
             if details:
                 detailsf.write( ",".join(enquote(row[column_index[col]]) for col in columns) + "," + bucketstr + '\n' )
 
+    # Summary requested? Append to any existing file.
     if summary:
+        if os.path.exists(summary):
+            summaryf = open(summary, 'ab')
+        else:
+            summaryf = open(summary, 'wb')
+            summaryf.write('date,other,uncategorized,categorized,' + ",".join(enquote(cat) for cat in categories) + '\n')
         t = datetime.date.today().isoformat()
         sumstr = ','.join([str(s) for s in sums])
-        summaryf.write( "{},{},{},".format(t, uncategorized, categorized) + sumstr + '\n')
+        summaryf.write( "{},{},{},{},".format(t, other, uncategorized, categorized) + sumstr + '\n')
 
     return (categorized, uncategorized)
 
@@ -139,7 +154,7 @@ def main():
 
     print "Starting..."
 
-    readCategories(args.categories)
+    readCategories(args.categories, summary=args.summary)
 
     (c,u) = readFile(args.data, details=args.details, summary=args.summary)
     print "{0} categorized, {1} not, {2}%".format(c,u,c/(c+u))
