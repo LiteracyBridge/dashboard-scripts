@@ -1,0 +1,37 @@
+<style type="text/css">
+.import-stats
+{
+    font-family: "Open Sans", "Helvetica", sans-serif;
+    font-size: 1em;
+}
+.import-stats h1 { font-size: 1.4em; font-weight: 600; margin: 10px 0 0 0;}
+.import-stats h2 { font-size: 1.3em; font-weight: 500; margin: 10px 0 0 0;}
+.import-stats h3 { font-size: 1.2em; font-weight: 400; margin: 0;}
+.import-stats h4 { font-size: 1.1em; font-weight: 300; margin: 0;}
+.import-stats h5 { font-size: 1em; font-weight: 300; margin: 0;}
+.import-stats h6 { font-size: 1em; font-weight: 300; margin: 0;}
+.import-stats h7 { font-size: 1em; font-weight: 300; margin: 0;}
+.import-stats h8 { font-size: 1em; font-weight: 300; margin: 0;}
+.import-stats ul, .import-stats li
+{
+    margin: 0;
+    font-weight: lighter;
+}
+.import-stats .numlogfileswitherrors, .import-stats .opdatanosyncdir, .import-stats .syncdirnoopdata
+{
+    font-weight: bold;
+    color: red;
+}
+
+.s3import p {
+    font-family: "Open Sans", "Helvetica", sans-serif;
+    font-size: 0.8em;
+    font-weight: lighter;
+    margin: 0;
+}
+.s3import h2 {
+    font-family: "Open Sans", "Helvetica", sans-serif;
+    margin-bottom:0
+}
+
+</style>

@@ -57,9 +57,47 @@ def enquote(string):
         tmp = '"'+tmp+'"'
     return tmp
 
-# Read the list of categories from a file. Assumes category-code is first column.
+# If any new categories were added (in the categories.csv extracted from the db), we have added them to the end of
+# the list of categories from summary.csv. But if there are now new categories, we need to re-write the summary.csv
+# file with a new header, including the new categories. While we're at it, re-write the existing records with zeros
+# for the counts in the new categories.
+def extendSummary(summary):
+    # Read the old summary.csv from here
+    oldf = open(summary, 'rb')
+    old_csv = csv.reader(oldf, delimiter=',')
+
+    # Write the new summary.csv to here
+    if os.path.exists(summary+'.new'):
+        os.remove(summary+'.new')
+    newf = open(summary + '.new', 'wb')
+    newf.write('date,other,uncategorized,categorized,' + ",".join(enquote(cat) for cat in categories) + '\n')
+    for row in old_csv:
+        # Skip the header, then copy the contents of every line.
+        if old_csv.line_num > 1:
+            # date,other,uncategorized,categorized,categories...
+            values = [0 for ix in range(4+len(categories))]
+            for ix in range(len(row)):
+                values[ix] = row[ix]
+            valstr = ','.join([str(v) for v in values])
+            newf.write(valstr + '\n')
+
+    # Rename files so we use the new one going forward
+    newf.close()
+    oldf.close()
+    if os.path.exists(summary+'.old'):
+        os.remove(summary+'.old')
+    os.rename(summary, summary+'.old')
+    os.rename(summary+'.new', summary)
+    
+
+
+# Read the list of categories from a file. Assumes category-code is first column. Because the order could possibly
+# have changed, or because categories could possibly have been deleted, first read the existing list and order
+# of categories from any summary.csv that we have. (If we have no summary.csv, then we have no existing list and/or
+# ordering to worry about.)
 def readCategories(filename, summary=None):
     global categories
+
     # If we're appending to a summaries file, first get the categories (in the existing order) already in use.
     if summary:
         if os.path.exists(summary):
@@ -68,8 +106,9 @@ def readCategories(filename, summary=None):
             row = summarycsv.next()
             # skip date, other, uncategorized, categorized
             categories = row[4:]
+            summaryf.close()
 
-
+    any_added = False
     file = open(filename, 'rb')
     csvfile = csv.reader(file, delimiter=',')
     for row in csvfile:
@@ -78,6 +117,11 @@ def readCategories(filename, summary=None):
             # If we want only feedback categories, add this: and (category_filter.match(category) or uncategorized_filter.match(category))
             if not category in categories:
                 categories.append(category)
+                any_added = True
+    file.close()
+
+    if any_added:
+        extendSummary(summary)
 
 # Read and process the metadata
 def readFile(filename, summary=None, details=None):
@@ -137,11 +181,11 @@ def readFile(filename, summary=None, details=None):
         else:
             summaryf = open(summary, 'wb')
             summaryf.write('date,other,uncategorized,categorized,' + ",".join(enquote(cat) for cat in categories) + '\n')
-        t = datetime.date.today().isoformat()
+        t = datetime.datetime.utcnow().isoformat()
         sumstr = ','.join([str(s) for s in sums])
         summaryf.write( "{},{},{},{},".format(t, other, uncategorized, categorized) + sumstr + '\n')
 
-    return (categorized, uncategorized)
+    return (uncategorized, categorized, other)
 
 def main():
     global args
@@ -152,12 +196,10 @@ def main():
     arg_parser.add_argument('--summary', help='File to receive summary statistics')
     args = arg_parser.parse_args()
 
-    print "Starting..."
-
     readCategories(args.categories, summary=args.summary)
 
-    (c,u) = readFile(args.data, details=args.details, summary=args.summary)
-    print "{0} categorized, {1} not, {2}%".format(c,u,c/(c+u))
+    (u,c,o) = readFile(args.data, details=args.details, summary=args.summary)
+    print "{0} uncategorized, {1} categorized ({2}%), {3} other".format(u,c,c/(c+u),o)
 
 if __name__ == '__main__':
     sys.exit(main())

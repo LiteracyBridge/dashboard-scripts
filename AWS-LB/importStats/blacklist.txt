@@ -1,0 +1,3 @@
+# tbcd ids to be skipped
+tbcd0000 # cliff
+tbcd000c # bill
