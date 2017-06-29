@@ -47,7 +47,7 @@ function exportProject() {
         fi
     done
     # any changes?
-    if [ "${recent}" -eq "${latest}" ]; then
+    if [ "${recent}" -eq "${latest}" && -e categories.csv && -e messages.csv && -e summary.csv ]; then
         # no, done with this project
         printf "${proj} is up-to-date at version ${latest}\n">>${report}
         return

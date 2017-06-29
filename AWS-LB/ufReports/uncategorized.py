@@ -62,6 +62,9 @@ def enquote(string):
 # file with a new header, including the new categories. While we're at it, re-write the existing records with zeros
 # for the counts in the new categories.
 def extendSummary(summary):
+    # If there ISN'T an existing summary.csv file, nothing to do.
+    if not os.path.exists(summary):
+        return
     # Read the old summary.csv from here
     oldf = open(summary, 'rb')
     old_csv = csv.reader(oldf, delimiter=',')
