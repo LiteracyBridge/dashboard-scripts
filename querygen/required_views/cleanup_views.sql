@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS auth_group                 CASCADE;
+DROP TABLE IF EXISTS auth_group_permissions     CASCADE;
+DROP TABLE IF EXISTS auth_permission            CASCADE;
+DROP TABLE IF EXISTS auth_user                  CASCADE;
+DROP TABLE IF EXISTS auth_user_groups           CASCADE;
+DROP TABLE IF EXISTS auth_user_user_permissions CASCADE;
+DROP TABLE IF EXISTS c3p0_test_table            CASCADE;
+DROP TABLE IF EXISTS "contentmetadata_OLD"      CASCADE;
+DROP TABLE IF EXISTS cubesviewer_cubesview      CASCADE;
+DROP TABLE IF EXISTS cubesviewer_note           CASCADE;
+DROP TABLE IF EXISTS django_admin_log           CASCADE;
+DROP TABLE IF EXISTS django_content_type        CASCADE;
+DROP TABLE IF EXISTS django_migrations          CASCADE;
+DROP TABLE IF EXISTS django_session             CASCADE;
