@@ -78,7 +78,7 @@ function exportProject() {
 function deployUpdated() {
     local staging=~/ufreports
     if [ -d ${staging} ]; then
-        local s3dest="s3://dashboard-lb-stats/uf/data"
+        local s3dest="s3://dashboard-lb-stats/uf"
 
         # copy from dropbox those files whose contents have changed (--update -c)
         printf "\n\nReports distributed at $(date)\n\nrsync:\n" >>${report}

@@ -117,6 +117,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
       round(sum(effective_completions)/greatest(MAX(package_tbs_used), 1), 1)
                                          AS effective_completions_per_tb,
       sum(completions)                   AS completions,
+      round(sum(completions)/greatest(MAX(package_tbs_used), 1), 1)
+                                         AS completions_per_tb,
       count(DISTINCT talkingbook)        AS num_tbs,
       MAX(ptb.package_tbs_used)          AS num_package_tbs,
       ROUND(100.0*count(DISTINCT talkingbook)/greatest(MAX(package_tbs_used), 1), 0)
