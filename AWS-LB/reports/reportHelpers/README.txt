@@ -4,7 +4,7 @@ These files are injected into a psql script. The NN- prefixes control the orderi
 that's useful. (It is not needed as of this writing.)
 
 By the time these scripts have all been included, the psql script should be ready to produce the
-reports. These helpers can defined views, create temporary tables, whatever they need to do for
+reports. These helpers can define views, create temporary tables, whatever they need to do for
 the setup.
 
 The contents of the projectQueries.list and globalQueries.list files are assumed to be the 

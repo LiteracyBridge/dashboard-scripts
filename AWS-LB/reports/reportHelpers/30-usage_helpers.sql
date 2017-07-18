@@ -509,3 +509,21 @@ CREATE OR REPLACE TEMP VIEW usage_dashboard AS (
       extract.row<=4
 );
 
+ -- Like usage_by_community, but with deployed TB count added.
+SELECT * INTO TEMPORARY TABLE usage_by_community_with_depl FROM ( 
+    SELECT
+        uc.project, uc.deploymentnumber, uc.deployment, uc.startdate, uc.package
+        ,uc.languagecode, uc.language, uc.community
+        ,uc.num_messages, uc.duration_minutes, uc.played_minutes, uc.effective_completions, uc.completions
+        ,uc.community_tbs as reporting_tbs, uc.pkg_tbs
+        ,dc.deployed_tbs
+        
+    FROM usage_by_package_community uc
+    JOIN deployments_by_community dc
+      ON dc.deploymentnumber=uc.deploymentnumber AND dc.package=uc.package AND dc.community ilike uc.community
+    ORDER BY
+      uc.project
+      ,uc.deploymentnumber
+      ,uc.community
+) us_by_cm_depl;
+
