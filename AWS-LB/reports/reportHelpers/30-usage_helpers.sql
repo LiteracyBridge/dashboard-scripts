@@ -107,6 +107,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
       languagecode,
       language,
       COUNT(DISTINCT category)           AS num_categories,
+      STRING_AGG(DISTINCT category, ';') AS category_list,
       contentid,
       title,
       round(duration_seconds/60.0, 1)    AS duration_minutes,

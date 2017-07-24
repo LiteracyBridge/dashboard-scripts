@@ -105,7 +105,6 @@ function gatherFiles() {
     # gather from s3
     echo "Gather from s3"
     tmpdir=$(mktemp -d)
-#    tmpdir=/var/folders/cj/zjtglnd17x1_spsqm5l8smtm0000gp/T/tmp.RVQlE7oM
     echo "temp:${tmpdir}"
 
     # pull files from s3
@@ -196,7 +195,7 @@ function importStatistics() {
 }
 
 function sendMail() {
-    ${dropbox}/AWS-LB/bin/sendses.py --subject 'Statistics & User Feedback imported' --body ${report}
+    ${email} --subject 'Statistics & User Feedback imported' --body ${report}
 }
 
 
