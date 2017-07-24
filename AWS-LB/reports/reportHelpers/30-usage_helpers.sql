@@ -39,6 +39,7 @@ SELECT * INTO TEMPORARY TABLE usage_info_base2 FROM (
       END             AS category,
       cs.contentid,
       cm.title,
+      cm.format,
       cm.duration_sec AS duration_seconds,
       cs.talkingbook,
       cs.played_seconds,
@@ -66,6 +67,7 @@ SELECT * INTO TEMPORARY TABLE usage_info_base2 FROM (
       pi.category,
       pi.contentid,
       pi.title,
+      pi.format,
       pi.duration_seconds,
       pi.talkingbook,
       pi.played_seconds,
@@ -110,6 +112,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
       STRING_AGG(DISTINCT category, ';') AS category_list,
       contentid,
       title,
+      format,
       round(duration_seconds/60.0, 1)    AS duration_minutes,
       round(sum(played_seconds)/60.0, 1) AS played_minutes,
       round(sum(played_seconds)/60.0/greatest(MAX(package_tbs_used), 1), 1)
@@ -138,6 +141,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
       language,
       contentid,
       title,
+      format,
       duration_seconds
     ORDER BY project, startdate, package, title
 ) us_by_msg;
