@@ -48,11 +48,11 @@ SELECT * INTO TEMPORARY TABLE usage_info_base2 FROM (
     FROM
       usage_info_base cs
       JOIN contentmetadata2 cm
-        ON cs.contentid=cm.contentid AND cs.project=cm.project
+        ON cs.contentid ilike cm.contentid AND cs.project=cm.project
       JOIN contentinpackage cp
-        ON cs.package=cp.contentpackage AND cs.contentid=cp.contentid
+        ON cs.package ilike cp.contentpackage AND cs.contentid ilike cp.contentid
       JOIN categories cat
-        ON cat.categoryid=cp.categoryid AND cat.projectcode=cp.project
+        ON cat.categoryid ilike cp.categoryid AND cat.projectcode=cp.project
 ) us_info_b2;
 
   -- This adds the deploymentnumber from deployments, and language from language.
@@ -80,10 +80,10 @@ SELECT * INTO TEMPORARY TABLE usage_info_base2 FROM (
     FROM
       usage_info_base2 pi
       JOIN packagesindeployment pid
-        ON pid.project=pi.project AND pid.contentpackage=pi.package
+        ON pid.project=pi.project AND pid.contentpackage ilike pi.package
       JOIN deployments d
-        ON d.project=pi.project AND d.deployment=pid.deployment
-      JOIN languages l ON l.projectcode = pi.project AND l.languagecode = pi.languagecode
+        ON d.project=pi.project AND d.deployment ilike pid.deployment
+      JOIN languages l ON l.projectcode = pi.project AND l.languagecode ilike pi.languagecode
 
  ) us_info;
 
@@ -130,7 +130,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
     FROM
       usage_info ci
       JOIN package_tbs_used ptb
-        ON ptb.project=ci.project AND ptb.package=ci.package
+        ON ptb.project=ci.project AND ptb.package ilike ci.package
     GROUP BY
       ci.project,
       ci.deployment,
@@ -207,11 +207,11 @@ SELECT * INTO TEMPORARY TABLE usage_by_category FROM (
             GROUP BY project, deploymentnumber, package, category
            ) tbinfo
         ON tbinfo.project=ci.project AND tbinfo.deploymentnumber=ci.deploymentnumber
-           AND tbinfo.package=ci.package AND
-           tbinfo.category=ci.category
+           AND tbinfo.package ilike ci.package AND
+           tbinfo.category ilike ci.category
       JOIN
       package_tbs_used ptb
-        ON ptb.project=ci.project AND ptb.package=ci.package
+        ON ptb.project=ci.project AND ptb.package ilike ci.package
     GROUP BY ci.project, ci.deployment, ci.deploymentnumber, ci.startdate, ci.package, ci.languagecode, ci.language, ci.category
     ORDER BY project, startdate, package, category
 ) us_by_cat;
@@ -272,7 +272,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_deployment_category FROM (
        GROUP BY project, deploymentnumber, category
       ) tbinfo
         ON tbinfo.project=cats.project AND tbinfo.deploymentnumber=cats.deploymentnumber
-           AND tbinfo.category=cats.category
+           AND tbinfo.category ilike cats.category
 
     GROUP BY cats.project, cats.deployment, cats.deploymentnumber, cats.startdate, cats.category
     ORDER BY project, startdate, category
@@ -339,10 +339,10 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
        GROUP BY project, deploymentnumber, package, category
       ) tbinfo
         ON tbinfo.project=cats.project AND tbinfo.deploymentnumber=cats.deploymentnumber
-           AND tbinfo.package=cats.package AND tbinfo.category=cats.category
+           AND tbinfo.package ilike cats.package AND tbinfo.category ilike cats.category
       JOIN
       package_tbs_used ptb
-        ON ptb.project=cats.project AND ptb.package=cats.package
+        ON ptb.project=cats.project AND ptb.package ilike cats.package
 
     GROUP BY cats.project, cats.deployment, cats.deploymentnumber, cats.startdate, cats.package, cats.languagecode, cats.language, cats.category
     ORDER BY project, startdate, category
@@ -409,10 +409,10 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_community FROM  (
        GROUP BY project, deploymentnumber, package, community
       ) tbinfo
         ON tbinfo.project=cats.project AND tbinfo.deploymentnumber=cats.deploymentnumber
-           AND tbinfo.package=cats.package AND tbinfo.community=cats.community
+           AND tbinfo.package ilike cats.package AND tbinfo.community ilike cats.community
       JOIN
       package_tbs_used ptb
-        ON ptb.project=cats.project AND ptb.package=cats.package
+        ON ptb.project=cats.project AND ptb.package ilike cats.package
 
     GROUP BY cats.project, cats.deployment, cats.deploymentnumber, cats.startdate, 
         cats.package, cats.languagecode, cats.language, cats.community
@@ -480,7 +480,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_talkingbook FROM (
     FROM
       usage_info ci
       JOIN package_tbs_used ptb
-        ON ptb.project=ci.project AND ptb.package=ci.package
+        ON ptb.project=ci.project AND ptb.package ilike ci.package
     GROUP BY
       ci.project,
       ci.community,
@@ -525,7 +525,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_community_with_depl FROM (
         
     FROM usage_by_package_community uc
     JOIN deployments_by_community dc
-      ON dc.deploymentnumber=uc.deploymentnumber AND dc.package=uc.package AND dc.community ilike uc.community
+      ON dc.deploymentnumber=uc.deploymentnumber AND dc.package ilike uc.package AND dc.community ilike uc.community
     ORDER BY
       uc.project
       ,uc.deploymentnumber

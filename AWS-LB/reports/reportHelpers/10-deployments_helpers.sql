@@ -29,10 +29,10 @@ SELECT * INTO TEMPORARY TABLE deployment_info FROM (
       community,
       COUNT(DISTINCT talkingbook) AS deployed_tbs
     FROM update_operation_info di
-      JOIN deployments d ON d.project = di.project AND d.deployment = di.deployment
+      JOIN deployments d ON d.project = di.project AND d.deployment ilike di.deployment
       JOIN packagesindeployment pid
-        ON pid.project = di.project AND pid.deployment = di.deployment AND
-           pid.contentpackage = di.package
+        ON pid.project = di.project AND pid.deployment ilike di.deployment AND
+           pid.contentpackage ilike di.package
 
     GROUP BY di.project, di.deployment, d.deploymentnumber, di.package, pid.languagecode,
       pid.startdate, di.community
@@ -51,7 +51,7 @@ SELECT * INTO TEMPORARY TABLE deployments_by_package FROM (
       COUNT(DISTINCT community) AS num_communities,
       SUM(di.deployed_tbs)      AS deployed_tbs
     FROM deployment_info di
-      JOIN languages l ON l.projectcode = di.project AND l.languagecode = di.languagecode
+      JOIN languages l ON l.projectcode = di.project AND l.languagecode ilike di.languagecode
 
     GROUP BY di.project, di.deployment, di.deploymentnumber, di.startdate, di.package, di.languagecode,
       l.language

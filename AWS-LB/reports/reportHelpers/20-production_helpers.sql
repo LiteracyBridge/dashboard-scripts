@@ -22,15 +22,15 @@ SELECT * INTO TEMPORARY TABLE production_info FROM (
     FROM
       deployments d
       -- Add contentpackage and the package's language (code and name)
-      JOIN packagesindeployment pid ON pid.project = d.project AND pid.deployment = d.deployment
-      JOIN languages l ON l.projectcode = d.project AND l.languagecode = pid.languagecode
+      JOIN packagesindeployment pid ON pid.project = d.project AND pid.deployment ilike d.deployment
+      JOIN languages l ON l.projectcode = d.project AND l.languagecode ilike pid.languagecode
       -- Add the content and its category (id and name)
       JOIN
       contentinpackage cip
-        ON cip.project = d.project AND cip.contentpackage = pid.contentpackage
-      JOIN categories c ON c.projectcode = d.project AND c.categoryid = cip.categoryid
+        ON cip.project = d.project AND cip.contentpackage ilike pid.contentpackage
+      JOIN categories c ON c.projectcode = d.project AND c.categoryid ilike cip.categoryid
       -- Add the content's title, duration, and format
-      JOIN contentmetadata2 cm ON cm.project = d.project AND cm.contentid = cip.contentid
+      JOIN contentmetadata2 cm ON cm.project = d.project AND cm.contentid ilike cip.contentid
 ) prod_info;
 
   -- In the queries below, there is not a strict hierarchy of deployment/package/
@@ -138,8 +138,8 @@ SELECT * INTO TEMPORARY TABLE production_by_package FROM (
        FROM production_info
        GROUP BY project, deployment, deploymentnumber, package
       ) cat
-        ON cat.project = msg.project AND cat.deployment = msg.deployment AND
-           cat.package = msg.package
+        ON cat.project = msg.project AND cat.deployment ilike msg.deployment AND
+           cat.package ilike msg.package
     GROUP BY
       msg.project,
       msg.deployment,
