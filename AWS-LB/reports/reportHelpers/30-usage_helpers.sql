@@ -41,6 +41,8 @@ SELECT * INTO TEMPORARY TABLE usage_info_base2 FROM (
       cm.title,
       cm.format,
       cm.duration_sec AS duration_seconds,
+      cp.order as position,
+      --Use like: STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
       cs.talkingbook,
       cs.played_seconds,
       cs.effective_completions,
@@ -69,6 +71,7 @@ SELECT * INTO TEMPORARY TABLE usage_info_base2 FROM (
       pi.title,
       pi.format,
       pi.duration_seconds,
+      pi.position,
       pi.talkingbook,
       pi.played_seconds,
       pi.effective_completions,
@@ -113,6 +116,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
       contentid,
       title,
       format,
+      STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
       round(duration_seconds/60.0, 1)    AS duration_minutes,
       round(sum(played_seconds)/60.0, 1) AS played_minutes,
       round(sum(played_seconds)/60.0/greatest(MAX(package_tbs_used), 1), 1)
@@ -531,4 +535,5 @@ SELECT * INTO TEMPORARY TABLE usage_by_community_with_depl FROM (
       ,uc.deploymentnumber
       ,uc.community
 ) us_by_cm_depl;
+
 

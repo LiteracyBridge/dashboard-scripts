@@ -68,7 +68,7 @@ function configure() {
 
     report=${timestampedDir}/importStats.html
     rm ${report}
-    touch ${report}
+    #touch ${report}
     gatheredAny=false
 }
 
@@ -84,8 +84,7 @@ function main() {
     fi
 
     # If the timestampedDir is empty, we don't want it. Same for the dailyDir. If can't remove, ignore error.
-    rmdir ${timestampedDir} 2>/dev/null
-    rmdir ${dailyDir} 2>/dev/null
+    rmdir -p ${timestampedDir}
 }
 
 
