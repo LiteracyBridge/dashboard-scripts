@@ -45,5 +45,5 @@ if [ "${missing}" != "" ]; then
 fi
 
 # Copy new files. Rsync -va will list only the files copied, and copy only changed files.
-rsync -av --exclude .gitignore --exclude data ./AWS-LB/* ${reportsDir}/
+rsync -av --exclude utilities/*.csv --exclude utilities/*.xlsx --exclude .gitignore --exclude data ./AWS-LB/* ${reportsDir}/
 
