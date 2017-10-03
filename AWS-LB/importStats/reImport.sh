@@ -181,8 +181,12 @@ function importStatistics() {
             
             ${verbose} && echo "Import from ${statdir}." 
 
-            ${execute} && time java ${quiet} -jar ${core} -f -z "${dailyDir}/${statdir}" -d "${dailyDir}/${statdir}"
-        
+            # Make the commands, so that they can be displayed and/or executed
+            local import=(time java ${quiet} -jar ${core} -f -z "${dailyDir}/${statdir}" "${dailyDir}/${statdir}")
+
+            ${verbose} && echo "${import[@]}"
+            ${execute} && "${import[@]}"
+ 
             processed=$[processed+1]
             if [ $processed -ge $limit ]; then exit 1; fi
         else
