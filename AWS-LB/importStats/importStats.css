@@ -34,4 +34,10 @@
     margin-bottom:0
 }
 
+.reportLine p {
+    font-family: monospace;
+    -webkit-margin-before: 0;
+    -webkit-margin-after: 0;
+}
+
 </style>

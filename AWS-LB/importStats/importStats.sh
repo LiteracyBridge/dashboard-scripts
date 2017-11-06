@@ -66,10 +66,16 @@ function configure() {
     s3import="${s3bucket}/collected-data"
     s3archive="${s3bucket}/archived-data/${curYear}/${curMonth}/${curDay}"
 
+    recipientsfile="${dailyDir}/recipients.csv"
+    recipientsmapfile="${dailyDir}/recipients_map.csv"
+
     report=${timestampedDir}/importStats.html
     rm ${report}
     #touch ${report}
     gatheredAny=false
+
+    verbose=true
+    execute=true
 }
 
 function main() {
@@ -80,6 +86,7 @@ function main() {
     if ${gatheredAny} ; then
         importUserFeedback
         importStatistics
+        importDeployments
         sendMail
     fi
 
@@ -185,13 +192,46 @@ function importStatistics() {
     # iterate the timestamp directories.
     for statdir in $(cd ${dailyDir}; ls); do
         if [ -d "${dailyDir}/${statdir}" ]; then
-            time java ${quiet} -jar ${core} -f -z "${dailyDir}/${statdir}" -r "${report}"
+            time java ${quiet} -jar ${core} -f -z "${dailyDir}/${statdir}" -d "${dailyDir}/${statdir}" -r "${report}"
             if [ -s dashboard_core.log ]; then
                 mv dashboard_core.log "${dailyDir}/${statdir}/"
             fi
        fi
     done
 }
+
+function importDeployments() {
+    echo "<h2>Importing Deployment installations to database.</h2>">>${report}
+
+    # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
+    ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
+    \\timing
+    \\set ECHO queries
+    \COPY (SELECT projectname, directoryname, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
+EndOfQuery
+
+    # Gather the deploymentsAll.log files from the daily directory
+    deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.log')
+    #
+    local extract=(python "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
+    ${verbose} && echo "${extract[@]}">>"${report}.tmp"
+    ${execute} && "${extract[@]}">>"${report}.tmp"
+   
+    # Import into db, and update tbsdeployed
+    ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
+    \\timing
+    \\set ECHO queries
+    create temporary table tbtemp as select * from tbsdeployed where false;
+    \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
+    delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
+    insert into tbsdeployed select * from tbtemp on conflict do nothing;
+EndOfQuery
+
+    echo '<div class="reportline">'>>"${report}"
+    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+    echo '</div>'>>"${report}"
+}
+
 
 function sendMail() {
     ${email} --subject 'Statistics & User Feedback imported' --body ${report}
