@@ -47,6 +47,7 @@ function main() {
         makeDeploymentReports ${project}
         makePackageReports ${project}
 
+        extractMetadata ${project}
     done
 
     runBatchedQueries
@@ -184,6 +185,24 @@ function makeReportsWithItems() {
             firstline="+2"
         done
     done
+}
+
+#
+# Extracts metadata from database into project database directory (ACM-XYZ)
+function extractMetadata() {
+    local project="${1}"&&shift
+    local metadatadir="${dropbox}/ACM-${project}/TB-Loaders/metadata"
+    if [ -d "${dropbox}/ACM-${project}/TB-Loaders" ]; then
+        echo "Extract metadata for ${project} to ${metadatadir}"
+        mkdir -p "${metadatadir}"
+        # Extract data from recipientstable.
+        ${psql} ${dbcxn}  <<EndOfQuery 
+        \\timing
+        \\set ECHO queries
+        \COPY (SELECT * FROM recipients WHERE recipientid IN (SELECT recipientid FROM recipients_map WHERE project='${project}') ) TO '${metadatadir}/recipients.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM deployments WHERE project='${project}') TO '${metadatadir}/deploymenss.csv' WITH CSV HEADER;
+EndOfQuery
+    fi
 }
 
 #
