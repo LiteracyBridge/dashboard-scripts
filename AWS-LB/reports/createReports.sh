@@ -200,7 +200,7 @@ function extractMetadata() {
         \\timing
         \\set ECHO queries
         \COPY (SELECT * FROM recipients WHERE recipientid IN (SELECT recipientid FROM recipients_map WHERE project='${project}') ) TO '${metadatadir}/recipients.csv' WITH CSV HEADER;
-        \COPY (SELECT * FROM deployments WHERE project='${project}') TO '${metadatadir}/deploymenss.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM deployments WHERE project='${project}') TO '${metadatadir}/deployments.csv' WITH CSV HEADER;
 EndOfQuery
     fi
 }
