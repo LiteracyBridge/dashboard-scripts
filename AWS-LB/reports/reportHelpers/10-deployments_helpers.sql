@@ -25,7 +25,8 @@ SELECT * INTO TEMPORARY TABLE deployment_info FROM (
       d.deploymentnumber,
       di.package,
       pid.languagecode,
-      pid.startdate,
+      d.startdate,
+      d.enddate,
       community,
       COUNT(DISTINCT talkingbook) AS deployed_tbs
     FROM update_operation_info di
@@ -34,8 +35,14 @@ SELECT * INTO TEMPORARY TABLE deployment_info FROM (
         ON pid.project = di.project AND pid.deployment ilike di.deployment AND
            pid.contentpackage ilike di.package
 
-    GROUP BY di.project, di.deployment, d.deploymentnumber, di.package, pid.languagecode,
-      pid.startdate, di.community
+    GROUP BY di.project, 
+        di.deployment, 
+        d.deploymentnumber, 
+        di.package,
+        pid.languagecode,
+        d.startdate,
+        d.enddate,
+        di.community
 ) depl_i;
 
   -- Report of language, #communities, #tbs, per package
@@ -45,6 +52,7 @@ SELECT * INTO TEMPORARY TABLE deployments_by_package FROM (
       di.deployment,
       di.deploymentnumber,
       di.startdate,
+      di.enddate,
       di.package,
       di.languagecode,
       l.language,
@@ -53,7 +61,7 @@ SELECT * INTO TEMPORARY TABLE deployments_by_package FROM (
     FROM deployment_info di
       JOIN languages l ON l.projectcode = di.project AND l.languagecode ilike di.languagecode
 
-    GROUP BY di.project, di.deployment, di.deploymentnumber, di.startdate, di.package, di.languagecode,
+    GROUP BY di.project, di.deployment, di.deploymentnumber, di.startdate, di.enddate, di.package, di.languagecode,
       l.language
     ORDER BY project, di.startdate, deploymentnumber, package, languagecode, language
 ) depl_by_pkg;
@@ -62,15 +70,21 @@ SELECT * INTO TEMPORARY TABLE deployments_by_package FROM (
 SELECT * INTO TEMPORARY TABLE deployments_by_deployment FROM (
     SELECT DISTINCT
       dp.project,
-      dp.deployment,
+      --dp.deployment,
+      STRING_AGG(DISTINCT dp.deployment, ';') AS deployment,
       dp.deploymentnumber,
       dp.startdate,
+      dp.enddate,
       count(DISTINCT dp.package)  AS num_packages,
       count(DISTINCT dp.languagecode) AS num_languages,
       sum(dp.num_communities)         AS num_communities,
       sum(dp.deployed_tbs)            AS deployed_tbs
     FROM deployments_by_package dp
-    GROUP BY dp.project, dp.deployment, dp.deploymentnumber, dp.startdate
+    GROUP BY dp.project, 
+        --dp.deployment, 
+        dp.deploymentnumber, 
+        dp.startdate,
+        dp.enddate
     ORDER BY dp.project, dp.startdate, dp.deploymentnumber
 ) depl_by_depl;
   
@@ -81,11 +95,12 @@ SELECT * INTO TEMPORARY TABLE deployments_by_community FROM (
       di.deployment,
       di.deploymentnumber,
       di.startdate,
+      di.enddate,
       di.package,
       di.community,
       SUM(di.deployed_tbs)      AS deployed_tbs
     FROM deployment_info di
-    GROUP BY di.project, di.deployment, di.deploymentnumber, di.startdate, di.package, di.community
+    GROUP BY di.project, di.deployment, di.deploymentnumber, di.startdate, di.enddate, di.package, di.community
     ORDER BY project, community, di.startdate, deploymentnumber, package
 ) depl_by_comm;
 
@@ -100,6 +115,22 @@ SELECT * INTO TEMPORARY TABLE deployments_by_talkingbook FROM (
     ORDER BY project, community, talkingbook
 ) depl_by_tb;
 
+CREATE OR REPLACE TEMP VIEW deployment_date_mismatch AS (
+    SELECT * FROM (
+      SELECT distinct project,
+        deploymentnumber,
+        STRING_AGG(DISTINCT deployment, ';') as deployments,
+        COUNT(DISTINCT startdate) as numstarts,
+        COUNT(DISTINCT enddate) as numends
+      FROM deployments
+      GROUP BY project,
+        deploymentnumber
+      ORDER BY project, deploymentnumber
+    ) d
+    WHERE numstarts!=1 OR numends!=1
+);
+
+
   -- Report the last 4 deployments per project
 CREATE OR REPLACE TEMP VIEW deployment_dashboard AS (
     SELECT
@@ -107,6 +138,7 @@ CREATE OR REPLACE TEMP VIEW deployment_dashboard AS (
       deployment,
       deploymentnumber,
       startdate,
+      enddate,
       num_packages,
       num_languages,
       num_communities,

@@ -5,6 +5,7 @@ deployments_by_community
 deployments_by_deployment
 deployments_by_package
 deployments_by_talkingbook
+deployment_date_mismatch
 production_by_category
 production_by_deployment
 production_by_package

@@ -105,7 +105,8 @@ SELECT * INTO TEMPORARY TABLE package_tbs_used FROM (
 SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
     SELECT DISTINCT
       ci.project,
-      ci.deployment,
+      --ci.deployment,
+      STRING_AGG(DISTINCT ci.deployment, ';') AS deployment,
       ci.deploymentnumber,
       ci.startdate,
       ci.package,
@@ -137,7 +138,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
         ON ptb.project=ci.project AND ptb.package ilike ci.package
     GROUP BY
       ci.project,
-      ci.deployment,
+      --ci.deployment,
       ci.deploymentnumber,
       ci.startdate,
       ci.package,
@@ -154,7 +155,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
 SELECT * INTO TEMPORARY TABLE usage_by_category FROM (
     SELECT DISTINCT
       ci.project,
-      ci.deployment,
+      --ci.deployment,
+      STRING_AGG(DISTINCT ci.deployment, ';') AS deployment,
       ci.deploymentnumber,
       ci.startdate,
       ci.package,
@@ -216,7 +218,14 @@ SELECT * INTO TEMPORARY TABLE usage_by_category FROM (
       JOIN
       package_tbs_used ptb
         ON ptb.project=ci.project AND ptb.package ilike ci.package
-    GROUP BY ci.project, ci.deployment, ci.deploymentnumber, ci.startdate, ci.package, ci.languagecode, ci.language, ci.category
+    GROUP BY ci.project, 
+      --ci.deployment, 
+      ci.deploymentnumber, 
+      ci.startdate, 
+      ci.package, 
+      ci.languagecode, 
+      ci.language, 
+      ci.category
     ORDER BY project, startdate, package, category
 ) us_by_cat;
 
@@ -224,7 +233,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_category FROM (
 SELECT * INTO TEMPORARY TABLE usage_by_deployment_category FROM (
     SELECT DISTINCT
       cats.project,
-      cats.deployment,
+      --cats.deployment,
+      STRING_AGG(DISTINCT cats.deployment, ';') AS deployment,
       cats.deploymentnumber,
       cats.startdate,
       COUNT(DISTINCT cats.package)              AS num_packages,
@@ -278,7 +288,11 @@ SELECT * INTO TEMPORARY TABLE usage_by_deployment_category FROM (
         ON tbinfo.project=cats.project AND tbinfo.deploymentnumber=cats.deploymentnumber
            AND tbinfo.category ilike cats.category
 
-    GROUP BY cats.project, cats.deployment, cats.deploymentnumber, cats.startdate, cats.category
+    GROUP BY cats.project, 
+      --cats.deployment, 
+      cats.deploymentnumber, 
+      cats.startdate, 
+      cats.category
     ORDER BY project, startdate, category
 ) us_by_depl_cat;
 
@@ -287,7 +301,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
     SELECT DISTINCT
       cats.project,
       cats.deploymentnumber,
-      cats.deployment,
+      --cats.deployment,
+      STRING_AGG(DISTINCT cats.deployment, ';') AS deployment,
       cats.startdate,
       cats.package,
       cats.languagecode,
@@ -348,7 +363,14 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
       package_tbs_used ptb
         ON ptb.project=cats.project AND ptb.package ilike cats.package
 
-    GROUP BY cats.project, cats.deployment, cats.deploymentnumber, cats.startdate, cats.package, cats.languagecode, cats.language, cats.category
+    GROUP BY cats.project, 
+      --cats.deployment, 
+      cats.deploymentnumber, 
+      cats.startdate, 
+      cats.package, 
+      cats.languagecode, 
+      cats.language, 
+      cats.category
     ORDER BY project, startdate, category
 ) us_by_pkg_cat;
 
@@ -357,7 +379,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_community FROM  (
     SELECT DISTINCT
       cats.project,
       cats.deploymentnumber,
-      cats.deployment,
+      --cats.deployment,
+      STRING_AGG(DISTINCT cats.deployment, ';') AS deployment,
       cats.startdate,
       cats.package,
       cats.languagecode,
@@ -418,8 +441,14 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_community FROM  (
       package_tbs_used ptb
         ON ptb.project=cats.project AND ptb.package ilike cats.package
 
-    GROUP BY cats.project, cats.deployment, cats.deploymentnumber, cats.startdate, 
-        cats.package, cats.languagecode, cats.language, cats.community
+    GROUP BY cats.project, 
+        --cats.deployment, 
+        cats.deploymentnumber, 
+        cats.startdate, 
+        cats.package, 
+        cats.languagecode, 
+        cats.language, 
+        cats.community
     ORDER BY project, startdate, community
 ) us_by_pkg_comm;
 
@@ -427,7 +456,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_community FROM  (
 SELECT * INTO TEMPORARY TABLE usage_by_deployment FROM (
     SELECT DISTINCT
       project,
-      deployment,
+      --deployment,
+      STRING_AGG(DISTINCT deployment, ';') AS deployment,
       deploymentnumber,
       startdate,
       COUNT(DISTINCT package)            AS num_packages,
@@ -441,7 +471,10 @@ SELECT * INTO TEMPORARY TABLE usage_by_deployment FROM (
       SUM(completions)                   AS num_completions
 
     FROM usage_info ui
-    GROUP BY project, deployment, deploymentnumber, startdate
+    GROUP BY project, 
+        --deployment, 
+        deploymentnumber, 
+        startdate
     ORDER BY project, startdate
 ) us_by_depl;
 
@@ -449,7 +482,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_deployment FROM (
 SELECT * INTO TEMPORARY TABLE usage_by_package FROM (
     SELECT DISTINCT
       project,
-      deployment,
+      --deployment,
+      STRING_AGG(DISTINCT deployment, ';') AS deployment,
       deploymentnumber,
       startdate,
       package,
@@ -464,7 +498,13 @@ SELECT * INTO TEMPORARY TABLE usage_by_package FROM (
       SUM(completions)                   AS num_completions
 
     FROM usage_info ui
-    GROUP BY project, deployment, deploymentnumber, startdate, package, languagecode, language
+    GROUP BY project, 
+        --deployment, 
+        deploymentnumber, 
+        startdate, 
+        package, 
+        languagecode, 
+        language
     ORDER BY project, startdate, package, languagecode
 ) us_by_pkg;
 

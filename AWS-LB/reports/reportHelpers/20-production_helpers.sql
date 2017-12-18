@@ -44,7 +44,8 @@ SELECT * INTO TEMPORARY TABLE production_info FROM (
 SELECT * INTO TEMPORARY TABLE production_by_deployment FROM (
     SELECT DISTINCT
       msg.project,
-      msg.deployment,
+      --msg.deployment,
+      STRING_AGG(DISTINCT msg.deployment, ';') AS deployment,
       msg.deploymentnumber,
       msg.startdate,
       MAX(pkg.num_packages)                  AS num_packages,
@@ -84,7 +85,10 @@ SELECT * INTO TEMPORARY TABLE production_by_deployment FROM (
             FROM production_info
             GROUP BY project, deployment, deploymentnumber
            ) cat ON cat.project = msg.project AND cat.deploymentnumber = msg.deploymentnumber
-    GROUP BY msg.project, msg.deployment, msg.deploymentnumber, msg.startdate
+    GROUP BY msg.project, 
+        --msg.deployment, 
+        msg.deploymentnumber, 
+        msg.startdate
     ORDER BY project, startdate 
 ) prod_by_depl;
 
