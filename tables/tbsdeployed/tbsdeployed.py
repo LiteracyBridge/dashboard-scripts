@@ -162,7 +162,10 @@ def read_deployments(filename):
                 non_specifics[project] = non_specifics[project] + 1
             continue
         if 'recipientid' not in data:
-            data['recipientid'] = lookup_recipient(data['project'], data['community'])
+            recipientid = lookup_recipient(data['project'], data['community'])
+            if not recipientid:
+                continue
+            data['recipientid'] = recipientid
         if all(x in data for x in columns):
             deployments.append(data)
 

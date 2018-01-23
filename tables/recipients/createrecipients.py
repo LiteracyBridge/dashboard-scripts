@@ -173,7 +173,6 @@ def create_id(directory, community=None, group=None, language=None):
             idfile.write('{}={}\n'.format(k, new_id[k]))
         for a in new_alias:
             idfile.write('alias={}\n'.format(a))
-            recipient_map.append({'project': project_name, 'directory': a, 'recipientid': id12})
         idfile.close()
 
     return id12
@@ -196,7 +195,7 @@ def look_for_language(directory):
 # Read and process the UNICEF-2 project specification recipients csv file.
 def read_unicef2_recipients(filename):
     set_current_project('unicef-2')
-    recipients_file = open(filename, 'rb')
+    recipients_file = open(filename, 'rU')
     csvfile = csv.reader(recipients_file, delimiter=',')
     directory_ix = group_ix = language_ix = 0  # stupid, but quiets lint.
 

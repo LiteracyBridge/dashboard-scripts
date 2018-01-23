@@ -23,7 +23,10 @@ function setDefaults() {
     if [ -z "${dropbox}" ]; then
       dropbox=~/Dropbox
     fi
-    
+
+    if [ -z "${bin}" ]; then
+        bin="${dropbox}/AWS-LB/bin"
+    fi
     if [ -z "${core}" ]; then
       # This lets us test new versions of core-with-deps.jar more easily.
       core=${dropbox}/AWS-LB/bin/core-with-deps.jar
@@ -207,7 +210,7 @@ function importDeployments() {
     ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
     \\timing
     \\set ECHO queries
-    \COPY (SELECT projectname, directoryname, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
+    \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
 EndOfQuery
 
     # Gather the deploymentsAll.log files from the daily directory

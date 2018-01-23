@@ -8,7 +8,7 @@ set -u
 
 # Set default values for any settings that aren't externally set.
 function setDefaults() {
-    if [ -z "${psql}" ]; then
+    if [ -z "${psql-}" ]; then
       if [ -e /Applications/Postgres.app/Contents/Versions/9.5/bin/psql ]; then
         psql=/Applications/Postgres.app/Contents/Versions/9.5/bin/psql
       elif [ -e /Applications/Postgres.app/Contents/Versions/9.4/bin/psql ]; then
@@ -24,7 +24,7 @@ function setDefaults() {
       dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
       echo "dbcxn is ${dbcxn}"
     fi
-    if [ -z "${dropbox}" ]; then
+    if [ -z "${dropbox-}" ]; then
       dropbox=~/Dropbox
       echo "Dropbox in ${dropbox}"
     fi
@@ -249,7 +249,7 @@ set -x
     ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
     \\timing
     \\set ECHO queries
-    \COPY (SELECT projectname, directoryname, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
+    \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
 EndOfQuery
 
     # Gather the deploymentsAll.log files from the daily directory

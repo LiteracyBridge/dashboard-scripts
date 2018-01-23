@@ -28,7 +28,8 @@ if [ -z "${dropbox}" ]; then
 fi
 
 function configure() {
-    fromspecification="UNICEF-2-recipients.csv"
+    fromspecification="noyed_recipients.csv"
+    #fromspecification="UNICEF-2-recipients.csv"
     application="createrecipients.py"
     recipientsfile="recipients.csv"
     recipmapfile="recipients_map.csv"
@@ -58,9 +59,9 @@ function createTable() {
     ${psql} ${dbcxn}  <<EndOfQuery >>log.txt
     \\timing
     \\set ECHO all
-    DROP TABLE IF EXISTS public.recipients CASCADE;
+    --DROP TABLE IF EXISTS public.recipients CASCADE;
     
-    DROP TABLE IF EXISTS public.recipients_map;
+    --DROP TABLE IF EXISTS public.recipients_map;
 
     CREATE TABLE IF NOT EXISTS public.recipients
     (
@@ -111,7 +112,8 @@ function extractRecipients() {
     \\set ECHO all
     \COPY (SELECT * FROM communities) TO '${communitiesfile}' WITH CSV HEADER;
 EndOfQuery
-    python ${application} UNICEF-2-recipients.csv --dropbox ${dropbox} --projects @projects.list --communities ${communitiesfile}
+    #python ${application} UNICEF-2-recipients.csv --dropbox ${dropbox} --projects @projects.list --communities ${communitiesfile}
+    python ${application} ${fromspecification} --dropbox ${dropbox}
 }
 
 function importTable() {
@@ -119,7 +121,6 @@ function importTable() {
     ${psql} ${dbcxn} -a <<EndOfQuery >>log.txt
     \\timing
     \\set ECHO all
-    delete from recipients where true;
     create temporary table temp_recip as select * from recipients where false;
     \copy temp_recip from '${recipientsfile}' with delimiter ',' csv header;
     insert into recipients select * from temp_recip  on conflict do nothing;
@@ -129,7 +130,6 @@ EndOfQuery
     ${psql} ${dbcxn}  <<EndOfQuery >>log.txt
     \\timing
     \\set ECHO all
-    delete from recipients_map where true;
     create temporary table temp_recip_map as select * from recipients_map where false;
     \copy temp_recip_map from '${recipmapfile}' with delimiter ',' csv header;
     insert into recipients_map select * from temp_recip_map  on conflict do nothing;
