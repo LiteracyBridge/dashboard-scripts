@@ -7,22 +7,22 @@ if [ -z "$dropbox" ]; then
 fi
 
 # Make sure we know the machine configuration.
-reportsDir=$dropbox/AWS-LB
-if [ ! -e $reportsDir/runAll.sh ]; then
-  echo "Expected to find $reportsDir/runAll.sh."
+awsDir=$dropbox/AWS-LB
+if [ ! -e ${awsDir}/runAll.sh ]; then
+  echo "Expected to find ${awsDir}/runAll.sh."
   echo "If your Dropbox installation directory is not '~/Dropbox', please set dropbox variable."
   exit 100
 fi
 
 # Clean up old installations.
-if [ -e $reportsDir/ACM_to_RDS ]; then
+if [ -e ${awsDir}/ACM_to_RDS ]; then
   echo "Renaming ACM_to_RDS to updateMetadata"
-  mv $reportsDir/ACM_to_RDS $reportsDir/updateMetadata
+  mv ${awsDir}/ACM_to_RDS ${awsDir}/updateMetadata
 fi
-if [ -e $reportsDir/Initial\ Processing\ SQL ]; then
+if [ -e ${awsDir}/Initial\ Processing\ SQL ]; then
   echo "Renaming Initial\\ Processing\\ SQL to initialSQL"
-  mv $reportsDir/Initial\ Processing\ SQL $reportsDir/initialSQL
-  rm $reportsDir/initialSQL/INITIAL_PROCESSING_POST_INSERT_OF_NEW_STATS.*
+  mv ${awsDir}/Initial\ Processing\ SQL ${awsDir}/initialSQL
+  rm ${awsDir}/initialSQL/INITIAL_PROCESSING_POST_INSERT_OF_NEW_STATS.*
 fi
 
 # Check that the required binary (or other) files exist.
@@ -45,6 +45,6 @@ if [ "${missing}" != "" ]; then
 fi
 
 # Copy new files. Rsync -va will list only the files copied, and copy only changed files.
-echo "./AWS-LB/* -> ${reportsDir}/"
-rsync -av --exclude utilities/*.csv --exclude utilities/*.xlsx --exclude .gitignore --exclude data ./AWS-LB/* ${reportsDir}/
+echo "./AWS-LB/* -> ${awsDir}/"
+rsync -av --exclude utilities/*.csv --exclude utilities/*.xlsx --exclude .gitignore --exclude data ./AWS-LB/* ${awsDir}/
 

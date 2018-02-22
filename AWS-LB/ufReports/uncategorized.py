@@ -8,6 +8,47 @@ import sys
 
 usage = '''
   Parse a .csv file and count "General Feedback" vs other categories.
+
+  messages.csv is like:
+    "DC_TITLE","DC_PUBLISHER","DC_IDENTIFIER","DC_SOURCE","DC_LANGUAGE","DC_RELATION","DTB_REVISION",
+            "LB_DURATION","LB_MESSAGE_FORMAT","LB_TARGET_AUDIENCE","LB_DATE_RECORDED","LB_KEYWORDS",
+            "LB_TIMING","LB_PRIMARY_SPEAKER","LB_GOAL","LB_ENGLISH_TRANSCRIPTION","LB_NOTES","LB_BENEFICIARY",
+            "LB_STATUS","CATEGORIES","QUALITY","PROJECT","LB_CORRELATION_ID"
+    "A-0008029C_0128_0001_2A9F5437","A-0008029C","A-0008029C_2A9F5437","SIGRE-JIRAPA","dga",
+            "LB-2_n87lyyogf2_oa","0","4","","","2102/03/14","","2016-2:0128","HH Rotation 4:Day \40",
+            "","","","","","9-2","l","UWR-FB-2016-2","WLBR"
+    "A-000603AA_0159_0001_4F04DC6F","A-000603AA","A-000603AA_4F04DC6F","SIGRE-JIRAPA","dga",
+            "","0","24","","","2193/04/15","","2016-2:0159","HH Rotation 4:Day -^U.(",
+            "","","","","","9-2","l","UWR-FB-2016-2",""
+    "A-000603AA_0097_0001_5F06F168","A-000603AA","A-000603AA_5F06F168","SIGRE-JIRAPA","dga",
+            "","0","26","","","2193/04/13","","2016-2:0097","HH Rotation 4:Day -^U-0",
+            "","","","","","9-2","l","UWR-FB-2016-2",""
+     columns of interest are TITLE, PUBLISHER, SOURCE, LANGUAGE, RELATION, CATEGORIES, and CORRELATION_ID, here like
+       title=A-0008029C_0128_0001_2A9F5437
+       publisher=A-0008029C
+       source=SIGRE-JIRAPA
+       language=dga
+       relation=LB-2_n87lyyogf2_oa
+       categories=9-2
+       correlation_id=WLBR
+
+  categories.csv is like:
+    "ID","NAME","FULLNAME"
+    "9","Feedback from Users","Feedback from Users"
+    "9-0","General Feedback","Feedback from Users:General Feedback"
+    "9-2","Useless","Feedback from Users:Useless"
+
+  summary.csv is a file with one line per day (if the day had any changes). The fields are
+    date,other,uncategorized,categorized,2,2-0,7,9-0,9-2,9-1,9-4,9-3,9-5,9-6,9-8,9-9,9-10,90-11,90-11-1-1
+    2017-06-20,0,3410,0,0,0,0,3410,0,0,0,0,0,0,0,0,0,0,0
+    2017-06-29,426,2984,0,0,0,0,2984,364,0,0,0,20,2,2,8,2,0,0
+    2017-07-06,1270,2034,100,0,0,1,2034,1235,0,1,0,14,4,1,12,2,0,1
+    2017-07-12,1738,1538,128,0,0,1,1538,1697,0,2,1,14,5,1,15,2,0,1
+    2017-07-13,2497,732,175,0,0,1,732,2440,1,9,2,15,9,1,17,2,0,2
+    2017-07-29,3206,0,198,0,0,1,0,3147,2,9,2,15,9,1,18,2,0,3
+  (An actual file has *many* more columns, mostly filled with zeros. But this shows, by each day, how many messages are
+  in each category.)
+
 '''
 
 # Characters we want to quote, in a .csv file
@@ -38,17 +79,6 @@ column_label = {"DC_TITLE":"feedback_id",               # unique id of the feedb
 columns = column_label.keys()
 # Column index of the columns we care about
 column_index = {}
-
-# Make sure theres 1:1 between columns and column_label, disregarding order
-def validate_columns():
-    for col in columns:
-        if not col in column_label:
-            exit(1)
-    for col in column_label:
-        if not col in columns:
-            exit(2)
-    return True
-ok = validate_columns()
 
 # If a string contains a quotable character, quote the string
 def enquote(string):
@@ -91,7 +121,7 @@ def extendSummary(summary):
         os.remove(summary+'.old')
     os.rename(summary, summary+'.old')
     os.rename(summary+'.new', summary)
-    
+
 
 
 # Read the list of categories from a file. Assumes category-code is first column. Because the order could possibly
@@ -193,7 +223,7 @@ def readFile(filename, summary=None, details=None):
 def main():
     global args
     arg_parser = argparse.ArgumentParser(description="Analyze user feedback metadata", usage=usage)
-    arg_parser.add_argument('data', help='File name, contains the metadata')
+    arg_parser.add_argument('data', help='File name, contains the messages metadata')
     arg_parser.add_argument('--categories', help='File with list of categories to include in output')
     arg_parser.add_argument('--details', help='File to receive per-message statistics')
     arg_parser.add_argument('--summary', help='File to receive summary statistics')
@@ -202,7 +232,8 @@ def main():
     readCategories(args.categories, summary=args.summary)
 
     (u,c,o) = readFile(args.data, details=args.details, summary=args.summary)
-    print "{0} uncategorized, {1} categorized ({2}%), {3} other".format(u,c,c/(c+u),o)
+    pct = c/(c+u) if (c+u)!=0 else 0
+    print("{0} uncategorized, {1} categorized ({2}%), {3} other".format(u,c,pct,o))
 
 if __name__ == '__main__':
     sys.exit(main())
