@@ -1,0 +1,4 @@
+p1-4,--category 9-0 --max 0.25
+p2-4,--category 9-0 --max 0.33
+p3-4,--category 9-0 --max 0.5
+p4-4,--category 9-0

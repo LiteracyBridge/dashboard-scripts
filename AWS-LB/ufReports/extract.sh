@@ -16,7 +16,7 @@ partitionsList=partitions.txt
 acmExporter="java -cp ${acm}acm.jar:${acm}lib/* org.literacybridge.acm.tools.CSVDatabaseExporter"
  acmExtract="java -cp ${acm}acm.jar:${acm}lib/* org.literacybridge.acm.utils.MessageExtractor"
   acmImport="java -cp ${acm}acm.jar:${acm}lib/* org.literacybridge.acm.utils.CmdLineImporter"
-  acmCloner="java -cp ${acm}acm.jar:${acm}lib/* CloneACM"
+  acmCloner="java -cp ${acm}acm.jar:${acm}lib/* org.literacybridge.acm.utils.CloneACM"
  summarizer="$(pwd)/uncategorized.py"
 
 # Main function (called from the end)
@@ -29,7 +29,7 @@ function main() {
         (cd "uf/${acm}"; getUserFeedbackStats "${acm}")
     done
 
-   # deployUpdated
+    deployUpdated
 }
 
 # Gets the latest DB update 
