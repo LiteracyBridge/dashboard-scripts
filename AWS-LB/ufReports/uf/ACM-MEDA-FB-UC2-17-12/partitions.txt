@@ -1,0 +1,4 @@
+P-DGA1,--language dga --max 0.5 --category 9-0
+P-DGA2,--language dga --category 9-0
+P-SSL,--language ssl --category 9-0
+P-SIG,--language sig --category 9-0

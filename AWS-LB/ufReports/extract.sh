@@ -19,6 +19,8 @@ acmExporter="java -cp ${acm}acm.jar:${acm}lib/* org.literacybridge.acm.tools.CSV
   acmCloner="java -cp ${acm}acm.jar:${acm}lib/* org.literacybridge.acm.utils.CloneACM"
  summarizer="$(pwd)/uncategorized.py"
 
+numericre='^[0-9]+$'
+
 # Main function (called from the end)
 function main() {
     printf "\n\nUser Feedback reports created at $(date).\n\n">${report}
@@ -43,8 +45,10 @@ function getLatest() {
     for dbix in ${dropbox}/${acm}${suffix}/db*.zip; do
         fn=${dbix##*/db}
         fnum=${fn%.zip}
-        if [ "${fnum}" -gt "${latest}" ]; then
-            latest="${fnum}"
+        if [[ ${fnum} =~ ${numericre} ]] ; then
+            if [ "${fnum}" -gt "${latest}" ]; then
+                latest="${fnum}"
+            fi
         fi
     done
     echo ${latest}
@@ -59,7 +63,9 @@ function getRecent() {
         fn=${curix##*/}
         fnum=${fn%.recent}
         if [ "${fnum}" -gt "${recent}" ]; then
-            recent="${fnum}"
+            if [[ ${fnum} =~ ${numericre} ]] ; then
+                recent="${fnum}"
+            fi
         fi
     done
     echo ${recent}
@@ -75,12 +81,12 @@ function getRecent() {
 # partitions.txt, with a series of lines, one for each partition.
 #
 # Example partition lines:
-# p1-4,--max 0.25 --include 9-0
+# p1-4,--max 0.25 --category 9-0
 #
 # This means "create a partition named 'p1-4'. Extract .25 of the messages
 # of category 9-0 (uncategorized user feedback) to that partition.
 #
-# p-dga,--language dga --include 9-0
+# p-dga,--language dga --category 9-0
 #
 # This means "create a partition named 'p-dga'. Extract messages in the 
 # dga language of category 9-0.
@@ -88,12 +94,15 @@ function getRecent() {
 # Use any filters that MessageExtractor supports, in the partitions.txt
 #
 # To partition by 1/3's use lines like:
-# p1-3,--max 0.33 --include 9-0
-# p2-3,--max 0.5 --include 9-0
-# p3-3,--include 9-0
+# p1-3,--max 0.33 --category 9-0
+# p2-3,--max 0.5 --category 9-0
+# p3-3,--category 9-0
 #
 # This puts 1/3 in p1-3, half the remaining in p2-3, and the rest in p3-3.
 #
+# Categories may also be excluded, by prefixing them with '!':
+p-cated,--lagnuage dga --category !9-0
+
 # When this script runs, the partition ACMs will be created if they don't 
 # already exist. They are given a name like "${acm}.${partition}"
 #
@@ -163,6 +172,11 @@ function partitionMessages() {
             ${acmImport} --acm "${acm}.${partition}" "${partition}/msgs">>${report}
             mkdir -p "${partition}/msgs/errors"
             mv "${partition}/msgs/*a18*" "${partition}/msgs/errors/"
+            # Clean up the "success" files. Remove all the directories, if they're empty.
+            rm "${partition}/msgs/success/*" 2>/dev/null
+            rmdir "${partition}/msgs/success" 2>/dev/null
+            rmdir "${partition}/msgs/errors" 2>/dev/null
+            rmdir "${partition}/msgs" 2>/dev/null
         done
     fi
 }
@@ -259,7 +273,7 @@ function deployUpdated() {
 
         # then sync changes to s3
         printf "\n\naws s3 sync:\n" >>${report}
-        (cd ${staging}; aws s3 sync . ${s3dest} --delete) >>${report}
+        (cd ${staging}; aws s3 sync . ${s3dest} --delete --cache-control "public, max-age=3600") >>${report}
 
         # clean up the s3 debugging spew, and send email
         cat ${report} | tr '\r' '\n' | sed '/^Completed.*remaining/d'>"${report%%.*}.filtered"
