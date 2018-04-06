@@ -40,6 +40,9 @@ function setDefaults() {
     if [ -z "${s3bucket}" ]; then
         s3bucket="s3://acm-stats"
     fi
+    needcss=true
+    verbose=true
+    execute=true
 }
 
 function configure() {
@@ -87,9 +90,11 @@ function main() {
 
     gatherFiles
     if ${gatheredAny} ; then
-        importUserFeedback
-        importStatistics
-        importDeployments
+        getRecipientMap ${dailyDir}
+
+        importUserFeedback ${dailyDir}
+        importStatistics ${dailyDir}
+        importDeployments ${dailyDir}
         sendMail
     fi
 
@@ -163,6 +168,7 @@ function findZips() {
 
 # Import user feedback to ACM-{project}-FB-{update}
 function importUserFeedback() {
+    local dailyDir=$1&&shift
     echo "Import user feedback to ACM-{project}-FB-{update}."
     local recordingsDir=${dailyDir}/userrecordings
     local processedDir=${dailyDir}/recordingsprocessed
@@ -186,32 +192,83 @@ function importUserFeedback() {
     fi
 }
 
+# injects css, if not already done
+function getCss() {
+    # If we haven't yet added the .css to the report file, do that now.
+    if ${needcss}; then
+        $verbose && echo "Adding css to report."
+        $execute && cat importStats.css >>"${report}"
+        needcss=false
+    fi
+}
+
 # Import statistics to PostgreSQL database.
 function importStatistics() {
+    local dailyDir=$1&&shift
     echo "Import user statistics to database."
+
     cat importStats.css >>"${report}"
+
     # These -D settings are needed to turn down the otherwise overwhelming hibernate logging.
-    local quiet="-Dorg.jboss.logging.provider=slf4j -Djava.util.logging.config.file=simplelogger.properties"
+    local quiet1=-Dorg.jboss.logging.provider=slf4j
+    local quiet2=-Djava.util.logging.config.file=simplelogger.properties
     # iterate the timestamp directories.
     for statdir in $(cd ${dailyDir}; ls); do
         if [ -d "${dailyDir}/${statdir}" ]; then
-            time java ${quiet} -jar ${core} -f -z "${dailyDir}/${statdir}" -d "${dailyDir}/${statdir}" -r "${report}"
+            local import=(time java ${quiet1} ${quiet2} -jar ${core} -f -z "${dailyDir}/${statdir}" -d "${dailyDir}/${statdir}" -r "${report}")
+
+            $verbose && echo "${import[@]}"
+            $execute && "${import[@]}"
+
             if [ -s dashboard_core.log ]; then
                 mv dashboard_core.log "${dailyDir}/${statdir}/"
             fi
        fi
     done
+
+    importAltStatistics ${dailyDir}
+}
+
+function importAltStatistics() {
+    local dailyDir=$1&&shift
+    local recipientsmapfile="${dailyDir}/recipients_map.csv"
+    local goodIFS=${IFS}
+    IFS=${traditionalIFS}
+
+    getCss
+    echo "<h2>Re-importing Play Statistics to database.</h2>">>${report}
+    rm "${report}.tmp"
+
+    local playstatisticsCsv=${dailyDir}/playstatistics.csv
+
+    # Gather the playstatistics.kvp files from the daily directory
+    local playstatisticsFiles=$(find "${dailyDir}" -iname 'playstatistics.kvp')
+    #
+    local columns="timestamp project deployment contentpackage community talkingbookid contentid started quarter half threequarters completed played_seconds survey_taken survey_applied survey_useless tbcdid stats_timestamp deployment_timestamp effective_completions recipientid"
+    local extract=("${bin}/kv2csv.py" --2pass --columns ${columns} --map ${recipientsmapfile} --output ${playstatisticsCsv} ${playstatisticsFiles})
+    ${verbose} && echo "${extract[@]}">>"${report}.tmp"
+    ${execute} && "${extract[@]}">>"${report}.tmp"
+
+    # Import into db, and update playstatistics
+    ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
+    \\timing
+    \\set ECHO queries
+    create temporary table mstemp as select * from playstatistics where false;
+    \copy mstemp from '${playstatisticsCsv}' with delimiter ',' csv header;
+    delete from playstatistics d using mstemp t where d.timestamp=t.timestamp and d.tbcdid=t.tbcdid and d.project=t.project and d.deployment=t.deployment and d.talkingbookid=t.talkingbookid and d.contentid=t.contentid;
+    insert into playstatistics select * from mstemp on conflict do nothing;
+EndOfQuery
+
+    echo '<div class="reportline">'>>"${report}"
+    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+    echo '</div>'>>"${report}"
+    IFS=${goodIFS}
+
 }
 
 function importDeployments() {
+    local dailyDir=$1&&shift
     echo "<h2>Importing Deployment installations to database.</h2>">>${report}
-
-    # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
-    ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
-    \\timing
-    \\set ECHO queries
-    \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
-EndOfQuery
 
     # Gather the deploymentsAll.log files from the daily directory
     deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.log')
@@ -233,6 +290,24 @@ EndOfQuery
     echo '<div class="reportline">'>>"${report}"
     awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
     echo '</div>'>>"${report}"
+}
+
+function getRecipientMap() {
+    local dailyDir=$1&&shift
+    local recipientsmapfile="${dailyDir}/recipients_map.csv"
+    local goodIFS=${IFS}
+    IFS=${traditionalIFS}
+
+    # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
+    ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
+    \\timing
+    \\set ECHO queries
+    \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
+EndOfQuery
+    echo '<div class="reportline">'>>"${report}"
+    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+    echo '</div>'>>"${report}"
+    IFS=${goodIFS}
 }
 
 

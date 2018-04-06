@@ -43,9 +43,10 @@ function setDefaults() {
         echo "email is ${email}"
     fi
     bin="${dropbox}/AWS-LB/bin"
-    
+   
     report=importStats.html
-    rm "${report}"
+    rm ${report}
+    echo "$(date)">${report}
     needcss=true
 }
 
@@ -84,9 +85,13 @@ function processYear() {
         exit 1
     fi
 
+    $verbose && echo "Processing ${year}"
+
     for month in $(cd ${yearDir}; ls); do
-        processMonth ${year} ${month}
-        if [ $processed -ge $limit ]; then exit 1; fi
+        if [ -d ${yearDir}/${month} ]; then
+            processMonth ${year} ${month}
+            if [ $processed -ge $limit ]; then exit 1; fi
+        fi
     done
 }
 
@@ -103,8 +108,10 @@ function processMonth() {
     $verbose && echo "Processing ${year}-${month}"
 
     for day in $(cd ${monthDir}; ls); do
-        processDay ${year} ${month} ${day}
-        if [ $processed -ge $limit ]; then exit 1; fi
+        if [ -d ${monthDir}/${day} ]; then
+            processDay ${year} ${month} ${day}
+            if [ $processed -ge $limit ]; then exit 1; fi
+        fi
     done
 }
 
@@ -121,6 +128,7 @@ function processDay() {
 
     $verbose && echo "Processing ${year}-${month}-${day}"
 
+    getRecipientMap ${dailyDir}
     $userfeedback && importUserFeedback ${dailyDir}
     $statistics && importStatistics ${dailyDir}
     $installations && importDeployments ${dailyDir}
@@ -173,8 +181,8 @@ function importUserFeedback() {
         $verbose && echo "${cmd[@]}" \> "${dailyDir}/${lsfile}.log"
         $execute && "${cmd[@]}">"${dailyDir}/${lsfile}.log"
         local importer=org.literacybridge.acm.utils.FeedbackImporter
-        mkdir ${processedDir}
-        mkdir ${skippedDir}
+        mkdir -p ${processedDir}
+        mkdir -p ${skippedDir}
         echo " User feedback from: ${recordingsDir}"
         echo "       processed to: ${processedDir}"
         echo "         skipped to: ${skippedDir}"
@@ -207,7 +215,8 @@ function importStatistics() {
     local dailyDir=$1&&shift
 
     # These -D settings are needed to turn down the otherwise overwhelming hibernate logging.
-    local quiet="-Dorg.jboss.logging.provider=slf4j -Djava.util.logging.config.file=simplelogger.properties"
+    local quiet1=-Dorg.jboss.logging.provider=slf4j
+    local quiet2=-Djava.util.logging.config.file=simplelogger.properties
     # iterate the timestamp directories.
     for statdir in $(cd ${dailyDir}; ls); do
         # only process if .zip files; user recordings don't have .zip files (fortunately).
@@ -220,17 +229,56 @@ function importStatistics() {
             getCss
 
             # Make the commands, so that they can be displayed and/or executed
-            local import=(time java ${quiet} -jar ${core} -f -z "${dailyDir}/${statdir}" -d "${dailyDir}/${statdir}" -r "${report}")
+            local import=(time java ${quiet1} ${quiet2} -jar ${core} -f ${sqloption} -z "${dailyDir}/${statdir}" -d "${dailyDir}/${statdir}" -r "${report}")
 
             $verbose && echo "${import[@]}"
             $execute && "${import[@]}"
  
             processed=$[processed+1]
             if [ $processed -ge $limit ]; then exit 1; fi
-        else
+        elif [ -d "${statdir}" ]; then
             $verbose && echo "No zips in ${statdir}"
         fi
     done
+
+    importAltStatistics ${dailyDir}
+}
+
+function importAltStatistics() {
+    local dailyDir=$1&&shift
+    local recipientsmapfile="${dailyDir}/recipients_map.csv"
+    local goodIFS=${IFS}
+    IFS=${traditionalIFS}
+
+    getCss
+    echo "<h2>Re-importing Play Statistics to database.</h2>">>${report}
+    rm "${report}.tmp"
+
+    local playstatisticsCsv=${dailyDir}/playstatistics.csv
+
+    # Gather the playstatistics.kvp files from the daily directory
+    local playstatisticsFiles=$(find "${dailyDir}" -iname 'playstatistics.kvp')
+    #
+    local columns="timestamp project deployment contentpackage community talkingbookid contentid started quarter half threequarters completed played_seconds survey_taken survey_applied survey_useless tbcdid stats_timestamp deployment_timestamp effective_completions recipientid"
+    local extract=("${bin}/kv2csv.py" --2pass --columns ${columns} --map ${recipientsmapfile} --output ${playstatisticsCsv} ${playstatisticsFiles})
+    ${verbose} && echo "${extract[@]}">>"${report}.tmp"
+    ${execute} && "${extract[@]}">>"${report}.tmp"
+   
+    # Import into db, and update playstatistics
+    ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
+    \\timing
+    \\set ECHO queries
+    create temporary table mstemp as select * from playstatistics where false;
+    \copy mstemp from '${playstatisticsCsv}' with delimiter ',' csv header;
+    delete from playstatistics d using mstemp t where d.timestamp=t.timestamp and d.tbcdid=t.tbcdid and d.project=t.project and d.deployment=t.deployment and d.talkingbookid=t.talkingbookid and d.contentid=t.contentid;
+    insert into playstatistics select * from mstemp on conflict do nothing;
+EndOfQuery
+
+    echo '<div class="reportline">'>>"${report}"
+    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+    echo '</div>'>>"${report}"
+    IFS=${goodIFS}
+ 
 }
 
 function importDeployments() {
@@ -245,15 +293,8 @@ set -x
     getCss
     echo "<h2>Re-importing Deployment installations to database.</h2>">>${report}
 
-    # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
-    ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
-    \\timing
-    \\set ECHO queries
-    \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
-EndOfQuery
-
-    # Gather the deploymentsAll.log files from the daily directory
-    deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.log')
+    # Gather the deploymentsAll.kvp files from the daily directory
+    deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.kvp')
     #
     local extract=(python "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
@@ -275,13 +316,33 @@ EndOfQuery
     IFS=${goodIFS}
 }
 
+function getRecipientMap() {
+    local dailyDir=$1&&shift
+    local recipientsmapfile="${dailyDir}/recipients_map.csv"
+    local goodIFS=${IFS}
+    IFS=${traditionalIFS}
+
+    # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
+    ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
+    \\timing
+    \\set ECHO queries
+    \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
+EndOfQuery
+    echo '<div class="reportline">'>>"${report}"
+    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+    echo '</div>'>>"${report}"
+    IFS=${goodIFS}
+}
+
 function sendMail() {
-    local cmd=(${email} --subject 'Statistics Re-imported' --body ${report})
-    if [ ! -z ${report} ]; then
-        $verbose && echo "${cmd[@]}"
-        $execute && "${cmd[@]}"
-    else
-        $verbose && "No contents in report, not sending email."
+    if  ${sendemail} ; then
+        local cmd=(${email} --subject 'Statistics Re-imported' --body ${report})
+        if [ ! -z ${report} ]; then
+            $verbose && echo "${cmd[@]}"
+            $execute && "${cmd[@]}"
+        else
+            $verbose && "No contents in report, not sending email."
+        fi
     fi
 }
 
@@ -293,8 +354,10 @@ function usage() {
     echo ""
     echo "    -u         reimport User feedback"
     echo "    -s         reimport Statistics. If both user feedback and statistics, user feedback is first."
+    echo "    -z           when importing Statistics, do not perform database writes."
     echo "    -i         reimport Deployment Installations. Runs after UF or Stats."
     echo ""
+    echo "    -e         no email"
     echo "    -n         dry run, No import"
     echo "    -v         Verbose output"
     echo "    -l n       Limit to n directories imported"
@@ -310,16 +373,18 @@ function readArguments() {
     dryrun=false
     month=""
     skip=0
+    sendemail=true
     statistics=false
     userfeedback=false
     installations=false
     verbose=false
     execute=false
     year=$(date -u +%Y)
+    sqloption=''
     if [ $# == 0 ]; then help=true; else help=false; fi
 
     # Day:, Help, Installations, sKip:, Limit:, Month:, No-execute, Stats, Userfeedback, Verbose, -set X, Year:
-    opts=d:hik:l:m:nsuvy:
+    opts=ed:hik:l:m:nsuvxy:z
 
     # Enumerating options
     foundone=false
@@ -327,6 +392,7 @@ function readArguments() {
     do
         #echo OPT:$opt ${OPTARG+OPTARG:$OPTARG}
         case "${opt}" in
+        e) sendemail=false;;
         d) day=${OPTARG};;
         h) help=true;;
         i) installations=true;;
@@ -338,6 +404,7 @@ function readArguments() {
         v) verbose=true;;
         x) set -x;;
         y) year=${OPTARG};;
+        z) sqloption='-x';;
         *) printf "OPT:$opt ${OPTARG+OPTARG:$OPTARG}" >&2;;
         esac
    done

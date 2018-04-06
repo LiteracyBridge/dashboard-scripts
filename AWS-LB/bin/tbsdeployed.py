@@ -142,18 +142,22 @@ def read_deployments(filename):
     for line in lines:
         if len(line) < 1:
             continue
+        #  First two fields are timestamp,operation, then k:v pairs separated by commas.
         parts = line.split(',')
         if len(parts) < 3:
             continue
+        # Map into a csv line.
         data = {}
         for ix in range(2, len(parts)):
             (k, v) = parts[ix].split(':', 1)
             if k in keepers:
                 data[keepers[k]] = v
                 found += 1
+        # Apply default values for missing but optional fields
         for o in optionals:
             if o not in data:
                 data[o] = optionals[o]
+        # We can't know the recipient for 'NON-SPECIFIC'.
         if data['community'].upper() == 'NON-SPECIFIC':
             project = data['project']
             if project not in non_specifics:
@@ -161,11 +165,14 @@ def read_deployments(filename):
             else:
                 non_specifics[project] = non_specifics[project] + 1
             continue
+        if data['username'] == '':
+            data['username'] = 'UNKNOWN'
         if 'recipientid' not in data:
             recipientid = lookup_recipient(data['project'], data['community'])
             if not recipientid:
                 continue
             data['recipientid'] = recipientid
+        # If we got every required field, keep the row.
         if all(x in data for x in columns):
             deployments.append(data)
 

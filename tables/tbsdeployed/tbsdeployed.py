@@ -19,6 +19,24 @@ non_specifics = {}
 
 recipient_map = {}
 
+recipient_overrides = {
+
+    "MEDA": {
+        "KANDANBAMBO B - CHARINGU": "KANDANBAMBO B - CHARIGU",
+        "KANYIRI - CHARINGU": "KANYIRI - CHARIGU",
+        "KATIMEN-LINYE - FIAN": "KATIMEN - LINYE - FIAN",
+        "MWINISUMBO - KULKPONG": "MWINISUMBU - KULKPONG",
+        "POGBETIETAA - BUNAA": "POGBATIETAA - BUNAA",
+        "POG-OLO - BULEN": "POG - OLO - BULEN",
+        "SUNGTAAMAALITAA A - BULEN": "SUNTAAMAALITAA - A - BULEN",
+        "TIETAA - IRI - TAFALI": "TIETAA-IRI - TAFALI"
+    },
+    "UWR": {
+        "MOTHER TO MOTHER SUPPORT TAMPAALA": "TAMPAALA-JIRAPA",  # this is a bit of a stretch, going on Tampaala.
+        "KABERE-YOUTH TAMPAALA": "TAMPAALA-JIRAPA"
+    }
+}
+
 
 def parse_map_file(filename):
     global recipient_map
@@ -43,6 +61,10 @@ def parse_map_file(filename):
 def lookup_recipient(proj, directory):
     proj = proj.upper()
     directory = directory.upper()
+    if proj in recipient_overrides and directory in recipient_overrides[proj]:
+        override = recipient_overrides[proj][directory]
+        sys.stdout.write('Using {} as override for {}.\n'.format(override, directory))
+        directory = override
     if proj not in recipient_map:
         sys.stdout.write('Project {} is not in recipient map.\n'.format(proj))
         return None
@@ -142,18 +164,22 @@ def read_deployments(filename):
     for line in lines:
         if len(line) < 1:
             continue
+        #  First two fields are timestamp,operation, then k:v pairs separated by commas.
         parts = line.split(',')
         if len(parts) < 3:
             continue
+        # Map into a csv line.
         data = {}
         for ix in range(2, len(parts)):
             (k, v) = parts[ix].split(':', 1)
             if k in keepers:
                 data[keepers[k]] = v
                 found += 1
+        # Apply default values for missing but optional fields
         for o in optionals:
             if o not in data:
                 data[o] = optionals[o]
+        # We can't know the recipient for 'NON-SPECIFIC'.
         if data['community'].upper() == 'NON-SPECIFIC':
             project = data['project']
             if project not in non_specifics:
@@ -161,11 +187,14 @@ def read_deployments(filename):
             else:
                 non_specifics[project] = non_specifics[project] + 1
             continue
+        if data['username'] == '':
+            data['username'] = 'UNKNOWN'
         if 'recipientid' not in data:
             recipientid = lookup_recipient(data['project'], data['community'])
             if not recipientid:
                 continue
             data['recipientid'] = recipientid
+        # If we got every required field, keep the row.
         if all(x in data for x in columns):
             deployments.append(data)
 

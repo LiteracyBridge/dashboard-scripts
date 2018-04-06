@@ -5,7 +5,10 @@ deployments_by_community
 deployments_by_deployment
 deployments_by_package
 deployments_by_talkingbook
+deployments_by_recipient
 deployment_date_mismatch
+tb_deployments
+tb_deployments_by_deployment
 production_by_category
 production_by_deployment
 production_by_package
@@ -18,3 +21,6 @@ usage_by_package_community
 usage_by_message
 usage_by_talkingbook
 usage_by_community_with_depl
+usage_by_deployment_per_district
+usage_by_package_category_per_district
+usage_by_message_per_district

@@ -42,7 +42,7 @@ function configure() {
 function main() {
     configure
 
-    dropbox=~/Dropbox
+    #dropbox=~/Dropbox
 
     # We need this to map the semi-random 'community name' back to a recipient id.
     extractRecipientsMap
@@ -63,7 +63,6 @@ function createTable() {
     ${psql} ${dbcxn}  <<EndOfQuery >>log.txt
     \\timing
     \\set ECHO queries
-    DROP TABLE IF EXISTS public.tbsdeployed;
     CREATE TABLE IF NOT EXISTS public.tbsdeployed
     (
       talkingbookid CHARACTER VARYING(255) NOT NULL,
@@ -92,7 +91,7 @@ EndOfQuery
 
 function collectAllDeployments() {
     # Gather the deploymentsAll.log files from 2017-October
-    deploymentsLogs=$(find ${dropbox}/collected-data-processed/2017 -iname 'deploymentsAll.log')
+    #deploymentsLogs=$(find ${dropbox}/collected-data-processed/2017 -iname 'deploymentsAll.log')
     #
     local extract=(python ${extractfilter} --tbdata ${extractfile} --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
     ${verbose} && echo "${extract[@]}"
@@ -104,7 +103,7 @@ function extractTbOperations() {
     ${psql} ${dbcxn}  <<EndOfQuery >>log.txt
     \\timing
     \\set ECHO queries
-    \COPY (SELECT outsn, updatedatetime, project, outdeployment, outimage, outcommunity, outfwrev, outsyncdir, location, action FROM tbdataoperations WHERE updatedatetime < '2017-10-04' AND action ilike 'update%') TO '${extractfile}' WITH CSV HEADER;
+    \COPY (SELECT outsn, updatedatetime, project, outdeployment, outimage, outcommunity, outfwrev, outsyncdir, location, action FROM tbdataoperations WHERE updatedatetime < '2017Y10M04' AND action ilike 'update%') TO '${extractfile}' WITH CSV HEADER;
 EndOfQuery
 }
 
@@ -122,7 +121,6 @@ function importTable() {
     ${psql} ${dbcxn}  <<EndOfQuery >>log.txt
     \\timing
     \\set ECHO queries
-    delete from tbsdeployed where true;
 
     create temporary table tbtemp as select * from tbsdeployed where false;
 
