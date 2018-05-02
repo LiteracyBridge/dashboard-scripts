@@ -5,7 +5,7 @@
 
 # Set default values for any settings that aren't externally set.
 function setDefaults() {
-    if [ -z "${psql}" ]; then
+    if [ -z "${psql-}" ]; then
       if [ -e /Applications/Postgres.app/Contents/Versions/9.5/bin/psql ]; then
         psql=/Applications/Postgres.app/Contents/Versions/9.5/bin/psql
       elif [ -e /Applications/Postgres.app/Contents/Versions/9.4/bin/psql ]; then
@@ -17,24 +17,24 @@ function setDefaults() {
         exit 100
       fi
     fi
-    if [ -z "${dbcxn}" ]; then
+    if [ -z "${dbcxn-}" ]; then
       dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
     fi
-    if [ -z "${dropbox}" ]; then
+    if [ -z "${dropbox-}" ]; then
       dropbox=~/Dropbox
     fi
 
-    if [ -z "${bin}" ]; then
+    if [ -z "${bin-}" ]; then
         bin="${dropbox}/AWS-LB/bin"
     fi
-    if [ -z "${core}" ]; then
+    if [ -z "${core-}" ]; then
       # This lets us test new versions of core-with-deps.jar more easily.
       core=${dropbox}/AWS-LB/bin/core-with-deps.jar
     fi
-    if [ -z "${acm}" ]; then
+    if [ -z "${acm-}" ]; then
         acm=${dropbox}/LB-software/ACM-install/ACM/software
     fi
-    if [ -z "${email}" ]; then
+    if [ -z "${email-}" ]; then
         email=${dropbox}/AWS-LB/bin/sendses.py
     fi
     if [ -z "${s3bucket}" ]; then
@@ -107,12 +107,16 @@ function main() {
 function gatherFiles() {
     # gather from dropbox
     echo "Gather from Dropbox"
-    time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats ${importdir} ${dailyDir} ${timestamp}
+    time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats ${importdir} ${dailyDir} ${timestamp} --report movedbx.txt
     if [ $? -eq 0 ]; then
         gatheredAny=true
         if [ -s acm.log ]; then
             # Log file from MoveStats above.
             mv acm.log ${timestampedDir}/movedbx.log
+        fi
+        if [ -s movedbx.txt ]; then
+            # Log file from MoveStats above.
+            mv movedbx.txt ${timestampedDir}/movedbx.txt
         fi
     fi
 
@@ -177,8 +181,8 @@ function importUserFeedback() {
         # Capture a list of all the files to be imported
         ls -lR ${recordingsDir}>${timestampedDir}/files.log
         local importer=org.literacybridge.acm.utils.FeedbackImporter
-        mkdir ${processedDir}
-        mkdir ${skippedDir}
+        mkdir -p ${processedDir}
+        mkdir -p ${skippedDir}
         echo " User feedback from: ${recordingsDir}"
         echo "       processed to: ${processedDir}"
         echo "         skipped to: ${skippedDir}"
@@ -236,7 +240,7 @@ function importAltStatistics() {
     IFS=${traditionalIFS}
 
     getCss
-    echo "<h2>Re-importing Play Statistics to database.</h2>">>${report}
+    echo "<h2>Importing Play Statistics to database.</h2>">>${report}
     rm "${report}.tmp"
 
     local playstatisticsCsv=${dailyDir}/playstatistics.csv
@@ -252,7 +256,7 @@ function importAltStatistics() {
     # Import into db, and update playstatistics
     ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
     \\timing
-    \\set ECHO queries
+    \\set ECHO all
     create temporary table mstemp as select * from playstatistics where false;
     \copy mstemp from '${playstatisticsCsv}' with delimiter ',' csv header;
     delete from playstatistics d using mstemp t where d.timestamp=t.timestamp and d.tbcdid=t.tbcdid and d.project=t.project and d.deployment=t.deployment and d.talkingbookid=t.talkingbookid and d.contentid=t.contentid;
@@ -269,23 +273,29 @@ EndOfQuery
 function importDeployments() {
     local dailyDir=$1&&shift
     echo "<h2>Importing Deployment installations to database.</h2>">>${report}
+    rm "${report}.tmp"
 
+    local deploymentsfile="${dailyDir}/tbsdeployed.csv"
     # Gather the deploymentsAll.log files from the daily directory
-    deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.log')
+    deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.kvp')
     #
     local extract=(python "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}">>"${report}.tmp"
-   
+  
     # Import into db, and update tbsdeployed
     ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
     \\timing
-    \\set ECHO queries
+    \\set ECHO all
     create temporary table tbtemp as select * from tbsdeployed where false;
     \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
     delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
     insert into tbsdeployed select * from tbtemp on conflict do nothing;
 EndOfQuery
+
+    local partition=("${bin}/dailytbs.py" ${deploymentsfile})
+    ${verbose} && echo "${partition[@]}">>"${report}.tmp"
+    ${execute} && "${partition[@]}">>"${report}.tmp"
 
     echo '<div class="reportline">'>>"${report}"
     awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
@@ -301,7 +311,7 @@ function getRecipientMap() {
     # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
     ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
     \\timing
-    \\set ECHO queries
+    \\set ECHO all
     \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
 EndOfQuery
     echo '<div class="reportline">'>>"${report}"

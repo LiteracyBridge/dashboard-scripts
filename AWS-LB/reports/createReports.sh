@@ -32,7 +32,7 @@ globalQueries="${codebasedir}/globalQueries.list"
 #
 # Main function (call is at end of file)
 function main() {
-    makeGlobalReports
+#    makeGlobalReports
 
     printf "project,path\n" > "${outputdir}/project_list.csv"
     projects=($(${psql} ${dbcxn} -c "SELECT projectcode from projects WHERE id >= 0" -t))
@@ -41,11 +41,12 @@ function main() {
         printf "___________________________________\n\nPROJECT:${project}\n"
         printf "%s,%s/\n" ${project} ${project} >>"${outputdir}/project_list.csv"
         projectdir=${outputdir}"/${project}"
+        rm -rf ${projectdir}
         mkdir -p ${projectdir}
 
-        makeProjectReports ${project}
-        makeDeploymentReports ${project}
-        makePackageReports ${project}
+ #       makeProjectReports ${project}
+ #       makeDeploymentReports ${project}
+ #       makePackageReports ${project}
 
         extractMetadata ${project}
     done

@@ -20,6 +20,10 @@ input_data = []
 column_names = []
 discover_columns = True
 recipient_map = None
+proj_warnings = {}
+comm_warnings = {}
+overrides_used = {}
+
 recipient_overrides = {
 
     "MEDA": {
@@ -35,6 +39,10 @@ recipient_overrides = {
     "UWR": {
         "MOTHER TO MOTHER SUPPORT TAMPAALA": "TAMPAALA-JIRAPA",  # this is a bit of a stretch, going on Tampaala.
         "KABERE-YOUTH TAMPAALA": "TAMPAALA-JIRAPA"
+    },
+    "CARE": {
+        "KPATUA NO": "KPATUA NO 1",
+        "SONGO ANONGTAABA": "SONGO ANONGTAABA 1"
     }
 }
 
@@ -60,20 +68,28 @@ def load_recipient_map(filename):
 
 
 def lookup_recipient(proj, directory):
-    global recipient_map, recipient_overrides
+    global recipient_map, recipient_overrides, proj_warnings, comm_warnings, overrides_used
     if not recipient_map:
         return None
     proj = proj.upper().strip('"')
     directory = directory.upper().strip('"')
     if proj in recipient_overrides and directory in recipient_overrides[proj]:
         override = recipient_overrides[proj][directory]
-        sys.stdout.write('Using {} as override for {}.\n'.format(override, directory))
+        if proj not in overrides_used or directory not in overrides_used[proj]:
+            if proj not in overrides_used: overrides_used[proj] = {}
+            overrides_used[proj][directory] = True
+            sys.stdout.write('Using {} as override for {}.\n'.format(override, directory))
         directory = override
     if proj not in recipient_map:
-        sys.stdout.write('Project {} is not in recipient map.\n'.format(proj))
+        if proj not in proj_warnings:
+            proj_warnings[proj] = True
+            sys.stdout.write('Project {} is not in recipient map.\n'.format(proj))
         return None
     if directory not in recipient_map[proj]:
-        sys.stdout.write('directory {} is not in map for {}.\n'.format(directory, proj))
+        if proj not in comm_warnings or directory not in comm_warnings[proj]:
+            if proj not in comm_warnings: comm_warnings[proj] = {}
+            comm_warnings[proj][directory] = True
+            sys.stdout.write('directory {} is not in map for {}.\n'.format(directory, proj))
         return None
     return recipient_map[proj][directory]
 

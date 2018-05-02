@@ -17,7 +17,7 @@
     margin: 0;
     font-weight: lighter;
 }
-.import-stats .numlogfileswitherrors, .import-stats .opdatanosyncdir, .import-stats .syncdirnoopdata
+.import-stats .numlogfileswitherrors, .import-stats .opdatanosyncdir, .import-stats .syncdirnoopdata, .import-stats .missingdirectory
 {
     font-weight: bold;
     color: red;

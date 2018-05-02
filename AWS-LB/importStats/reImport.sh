@@ -20,7 +20,7 @@ function setDefaults() {
         exit 100
       fi
     fi
-    if [ -z ${dbcxn-} ]; then
+    if [ -z "${dbcxn-}" ]; then
       dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
       echo "dbcxn is ${dbcxn}"
     fi
@@ -28,7 +28,10 @@ function setDefaults() {
       dropbox=~/Dropbox
       echo "Dropbox in ${dropbox}"
     fi
-    
+
+    if [ -z "${bin-}" ]; then
+        bin="${dropbox}/AWS-LB/bin"
+    fi
     if [ -z "${core-}" ]; then
       # This lets us test new versions of core-with-deps.jar more easily.
       core=${dropbox}/AWS-LB/bin/core-with-deps.jar
@@ -42,7 +45,6 @@ function setDefaults() {
         email=${dropbox}/AWS-LB/bin/sendses.py
         echo "email is ${email}"
     fi
-    bin="${dropbox}/AWS-LB/bin"
    
     report=importStats.html
     rm ${report}
@@ -53,6 +55,11 @@ function setDefaults() {
 function main() {
     setDefaults
     readArguments "$@"
+
+    if ! $userfeedback && ! $statistics && ! $installations; then
+        echo "No function specified, exiting"
+        exit 1
+    fi
 
     process
     sendMail
@@ -136,7 +143,6 @@ function processDay() {
 
 function importUserFeedback() {
     local dailyDir=$1&&shift
-
     echo "Import user feedback to ACM-{project}-FB-{update}."
     local recordingsDir=${dailyDir}/userrecordings
     local processedDir=${dailyDir}/recordingsprocessed
@@ -259,15 +265,15 @@ function importAltStatistics() {
     # Gather the playstatistics.kvp files from the daily directory
     local playstatisticsFiles=$(find "${dailyDir}" -iname 'playstatistics.kvp')
     #
-    local columns="timestamp project deployment contentpackage community talkingbookid contentid started quarter half threequarters completed played_seconds survey_taken survey_applied survey_useless tbcdid stats_timestamp deployment_timestamp effective_completions recipientid"
+    local columns="timestamp project deployment contentpackage community talkinbookid contentid started quarter half threequarters completed played_seconds survey_taken survey_applied survey_useless tbcdid stats_timestamp deployment_timestamp effective_completions recipientid"
     local extract=("${bin}/kv2csv.py" --2pass --columns ${columns} --map ${recipientsmapfile} --output ${playstatisticsCsv} ${playstatisticsFiles})
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}">>"${report}.tmp"
-   
+
     # Import into db, and update playstatistics
     ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
     \\timing
-    \\set ECHO queries
+    \\set ECHO all
     create temporary table mstemp as select * from playstatistics where false;
     \copy mstemp from '${playstatisticsCsv}' with delimiter ',' csv header;
     delete from playstatistics d using mstemp t where d.timestamp=t.timestamp and d.tbcdid=t.tbcdid and d.project=t.project and d.deployment=t.deployment and d.talkingbookid=t.talkingbookid and d.contentid=t.contentid;
@@ -278,11 +284,10 @@ EndOfQuery
     awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
     echo '</div>'>>"${report}"
     IFS=${goodIFS}
- 
+
 }
 
 function importDeployments() {
-set -x
     local dailyDir=$1&&shift
     local recipientsfile="${dailyDir}/recipients.csv"
     local recipientsmapfile="${dailyDir}/recipients_map.csv"
@@ -292,6 +297,7 @@ set -x
 
     getCss
     echo "<h2>Re-importing Deployment installations to database.</h2>">>${report}
+    rm "${report}.tmp"
 
     # Gather the deploymentsAll.kvp files from the daily directory
     deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.kvp')
@@ -299,16 +305,20 @@ set -x
     local extract=(python "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}">>"${report}.tmp"
-   
+  
     # Import into db, and update tbsdeployed
     ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
     \\timing
-    \\set ECHO queries
+    \\set ECHO all
     create temporary table tbtemp as select * from tbsdeployed where false;
     \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
     delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
     insert into tbsdeployed select * from tbtemp on conflict do nothing;
 EndOfQuery
+
+    local partition=("${bin}/dailytbs.py" ${deploymentsfile})
+    ${verbose} && echo "${partition[@]}">>"${report}.tmp"
+    ${execute} && "${partition[@]}">>"${report}.tmp"
 
     echo '<div class="reportline">'>>"${report}"
     awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
@@ -325,7 +335,7 @@ function getRecipientMap() {
     # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
     ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
     \\timing
-    \\set ECHO queries
+    \\set ECHO all
     \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
 EndOfQuery
     echo '<div class="reportline">'>>"${report}"
