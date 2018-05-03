@@ -2,6 +2,7 @@ import argparse
 import csv
 from datetime import datetime
 import os
+import re
 import sys
 
 usage = '''Extract deployments data from tbdataoperations.csv and multiple deploymentsAll.log.
@@ -44,6 +45,9 @@ recipient_overrides = {
     }
 }
 
+# Ignore leading spaces or (, take number, ignore spaces and comma, take number,
+# ignore trailing spaces or )
+COORDINATES_PATTERN = re.compile('^\\s*\\(?\\s*([+-]?[\\d.]+)[\\s,]*([+-]?[\\d.]+)\\s*\\)?\\s*$')
 
 def parse_map_file(filename):
     global recipient_map
@@ -210,6 +214,13 @@ def read_deployments(filename):
             if not recipientid:
                 continue
             data['recipientid'] = recipientid
+        if 'coordinates' in data:
+            coordinate = ''
+            match = COORDINATES_PATTERN.match(data['coordinates']) if data['coordinates'] else None
+            if match:
+                coordinate = '"({},{})"'.format(match.group(1), match.group(2))
+            data['coordinates'] = coordinate
+
         # If we got every required field, keep the row.
         if all(x in data for x in columns):
             deployments.append(data)
