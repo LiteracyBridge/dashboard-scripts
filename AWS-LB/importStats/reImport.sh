@@ -270,19 +270,22 @@ function importAltStatistics() {
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}">>"${report}.tmp"
 
-    # Import into db, and update playstatistics
-    ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
-    \\timing
-    \\set ECHO all
-    create temporary table mstemp as select * from playstatistics where false;
-    \copy mstemp from '${playstatisticsCsv}' with delimiter ',' csv header;
-    delete from playstatistics d using mstemp t where d.timestamp=t.timestamp and d.tbcdid=t.tbcdid and d.project=t.project and d.deployment=t.deployment and d.talkingbookid=t.talkingbookid and d.contentid=t.contentid;
-    insert into playstatistics select * from mstemp on conflict do nothing;
+    if $execute; then
+        # Import into db, and update playstatistics
+        ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
+        \\timing
+        \\set ECHO all
+        create temporary table mstemp as select * from playstatistics where false;
+        \copy mstemp from '${playstatisticsCsv}' with delimiter ',' csv header;
+        delete from playstatistics d using mstemp t where d.timestamp=t.timestamp and d.tbcdid=t.tbcdid and d.project=t.project and d.deployment=t.deployment and d.talkingbookid=t.talkingbookid and d.contentid=t.contentid;
+        insert into playstatistics select * from mstemp on conflict do nothing;
 EndOfQuery
 
-    echo '<div class="reportline">'>>"${report}"
-    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
-    echo '</div>'>>"${report}"
+        echo '<div class="reportline">'>>"${report}"
+        awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+        echo '</div>'>>"${report}"
+    fi
+
     IFS=${goodIFS}
 
 }
@@ -306,23 +309,26 @@ function importDeployments() {
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}">>"${report}.tmp"
   
-    # Import into db, and update tbsdeployed
-    ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
-    \\timing
-    \\set ECHO all
-    create temporary table tbtemp as select * from tbsdeployed where false;
-    \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
-    delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
-    insert into tbsdeployed select * from tbtemp on conflict do nothing;
+    if $execute; then
+        # Import into db, and update tbsdeployed
+        ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
+        \\timing
+        \\set ECHO all
+        create temporary table tbtemp as select * from tbsdeployed where false;
+        \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
+        delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
+        insert into tbsdeployed select * from tbtemp on conflict do nothing;
 EndOfQuery
 
-    local partition=("${bin}/dailytbs.py" ${deploymentsfile})
-    ${verbose} && echo "${partition[@]}">>"${report}.tmp"
-    ${execute} && "${partition[@]}">>"${report}.tmp"
+        local partition=("${bin}/dailytbs.py" ${deploymentsfile})
+        ${verbose} && echo "${partition[@]}">>"${report}.tmp"
+        ${execute} && "${partition[@]}">>"${report}.tmp"
 
-    echo '<div class="reportline">'>>"${report}"
-    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
-    echo '</div>'>>"${report}"
+        echo '<div class="reportline">'>>"${report}"
+        awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+        echo '</div>'>>"${report}"
+    fi
+    
     IFS=${goodIFS}
 }
 
@@ -332,15 +338,18 @@ function getRecipientMap() {
     local goodIFS=${IFS}
     IFS=${traditionalIFS}
 
-    # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
-    ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
-    \\timing
-    \\set ECHO all
-    \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
+    if $execute; then
+        # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
+        ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
+        \\timing
+        \\set ECHO all
+        \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
 EndOfQuery
-    echo '<div class="reportline">'>>"${report}"
-    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
-    echo '</div>'>>"${report}"
+        echo '<div class="reportline">'>>"${report}"
+        awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+        echo '</div>'>>"${report}"
+    fi
+
     IFS=${goodIFS}
 }
 
