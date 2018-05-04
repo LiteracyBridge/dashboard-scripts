@@ -75,7 +75,7 @@ function configure() {
     recipientsfile="${dailyDir}/recipients.csv"
     recipientsmapfile="${dailyDir}/recipients_map.csv"
 
-    report=${timestampedDir}/importStats.html
+    report=${dailyDir}/importStats.html
     rm ${report}
     #touch ${report}
     gatheredAny=false
@@ -112,11 +112,11 @@ function gatherFiles() {
         gatheredAny=true
         if [ -s acm.log ]; then
             # Log file from MoveStats above.
-            mv acm.log ${timestampedDir}/movedbx.log
+            mv acm.log ${dailyDir}/movedbx.log
         fi
         if [ -s movedbx.txt ]; then
             # Log file from MoveStats above.
-            mv movedbx.txt ${timestampedDir}/movedbx.txt
+            mv movedbx.txt ${dailyDir}/movedbx.txt
         fi
     fi
 
@@ -138,7 +138,7 @@ function gatherFiles() {
         gatheredAny=true
         if [ -s acm.log ]; then
             # Log file from MoveStats above.
-            mv acm.log ${timestampedDir}/moves3.log
+            mv acm.log ${dailyDir}/moves3.log
         fi
     fi
 
@@ -151,7 +151,7 @@ function gatherFiles() {
     # clean up the s3 output, and produce a formatted HTML report.
     cat reports3.raw | tr '\r' '\n' | sed '/^Completed.*remaining/d'>reports3.filtered
     if [ -s reports3.filtered ]; then
-        cp reports3.filtered ${timestampedDir}/s3.log
+        cp reports3.filtered ${dailyDir}/s3.log
         printf "<div class='s3import'><h2>S3 Imports</h2>">rpt.html
         (IFS=''; while read -r line || [[ -n "$line" ]]; do
             printf "<p>%s</p>" "$line">>rpt.html
@@ -179,7 +179,7 @@ function importUserFeedback() {
     local skippedDir=${dailyDir}/recordingsskipped
     if [ -d "${recordingsDir}" ]; then
         # Capture a list of all the files to be imported
-        ls -lR ${recordingsDir}>${timestampedDir}/files.log
+        ls -lR ${recordingsDir}>${dailyDir}/files.log
         local importer=org.literacybridge.acm.utils.FeedbackImporter
         mkdir -p ${processedDir}
         mkdir -p ${skippedDir}
