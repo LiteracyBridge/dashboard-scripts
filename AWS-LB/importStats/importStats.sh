@@ -248,8 +248,7 @@ function importAltStatistics() {
     # Gather the playstatistics.kvp files from the daily directory
     local playstatisticsFiles=$(find "${dailyDir}" -iname 'playstatistics.kvp')
     #
-    local columns="timestamp project deployment contentpackage community talkingbookid contentid started quarter half threequarters completed played_seconds survey_taken survey_applied survey_useless tbcdid stats_timestamp deployment_timestamp effective_completions recipientid"
-    local extract=("${bin}/kv2csv.py" --2pass --columns ${columns} --map ${recipientsmapfile} --output ${playstatisticsCsv} ${playstatisticsFiles})
+    local extract=("${bin}/kv2csv.py" --2pass --columns @columns.txt --map ${recipientsmapfile} --output ${playstatisticsCsv} ${playstatisticsFiles})
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}">>"${report}.tmp"
 

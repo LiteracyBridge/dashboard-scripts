@@ -175,7 +175,7 @@ def expand_arg_list(arg_list):
     for arg in arg_list:
         # If it starts with @, it is a file containing a list.
         if arg.startswith('@'):
-            arg_file = open(arg[1:], 'rb')
+            arg_file = open(arg[1:], 'r')
             for line in arg_file:
                 line = line.strip()
                 if line.startswith('#'):
