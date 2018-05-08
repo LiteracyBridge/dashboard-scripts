@@ -25,6 +25,9 @@ directory. This file has and entry for every year with data, containing entries 
 month with data, containing a list of days with data.
 '''
 
+# If either of these already exists, use it. If neither, create the last one.
+TBSDAILY_FILE = ['dailytbs.json', 'tbsdaily.json']
+
 # Will be a {proj1, proj2, ...} if only some projects desired.
 projects_limited_to = None
 files_opened = {}
@@ -65,11 +68,13 @@ def record_date_in_dailies_list(project):
     global year, month, day
     dailies = {}
     changed = False
-    dailies_path = '{}/DashboardReports/{}/dailytbs.json'.format(dropbox, project.upper())
-    if os.path.exists(dailies_path):
-        file = open(dailies_path, 'r')
-        dailies = json.load(file)
-        file.close()
+    for fn in TBSDAILY_FILE:
+        dailies_path = '{}/DashboardReports/{}/{}'.format(dropbox, project.upper(), fn)
+        if os.path.exists(dailies_path):
+            file = open(dailies_path, 'r')
+            dailies = json.load(file)
+            file.close()
+            break
 
     if not year in dailies:
         dailies[year] = {}
@@ -83,7 +88,7 @@ def record_date_in_dailies_list(project):
 
     if changed:
         with open(dailies_path, 'w') as file:
-            json.dump(dailies, file, indent=4)
+            json.dump(dailies, file, indent=2, sort_keys=True)
 
 # Closes all the open output files.
 def close_outputs():

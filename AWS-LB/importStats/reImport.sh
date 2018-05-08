@@ -1,6 +1,7 @@
 #!/bin/sh
 traditionalIFS="$IFS"
 IFS="`printf '\n\t'`"
+goodIFS="${IFS}"
 #CONFIGURATION
 # uncomment next line for script debugging
 #set -x
@@ -253,8 +254,6 @@ function importStatistics() {
 function importAltStatistics() {
     local dailyDir=$1&&shift
     local recipientsmapfile="${dailyDir}/recipients_map.csv"
-    local goodIFS=${IFS}
-    IFS=${traditionalIFS}
 
     getCss
     echo "<h2>Re-importing Play Statistics to database.</h2>">>${report}
@@ -271,7 +270,8 @@ function importAltStatistics() {
 
     if $execute; then
         # Import into db, and update playstatistics
-        ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
+        IFS=${traditionalIFS}
+        ${psql} ${dbcxn}  <<EndOfQuery | tee -a "${report}.tmp"
         \\timing
         \\set ECHO all
         create temporary table mstemp as select * from playstatistics where false;
@@ -279,13 +279,12 @@ function importAltStatistics() {
         delete from playstatistics d using mstemp t where d.timestamp=t.timestamp and d.tbcdid=t.tbcdid and d.project=t.project and d.deployment=t.deployment and d.talkingbookid=t.talkingbookid and d.contentid=t.contentid;
         insert into playstatistics select * from mstemp on conflict do nothing;
 EndOfQuery
+        IFS=${goodIFS}
 
         echo '<div class="reportline">'>>"${report}"
         awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
         echo '</div>'>>"${report}"
     fi
-
-    IFS=${goodIFS}
 
 }
 
@@ -294,8 +293,6 @@ function importDeployments() {
     local recipientsfile="${dailyDir}/recipients.csv"
     local recipientsmapfile="${dailyDir}/recipients_map.csv"
     local deploymentsfile="${dailyDir}/tbsdeployed.csv"
-    local goodIFS=${IFS}
-    IFS=${traditionalIFS}
 
     getCss
     echo "<h2>Re-importing Deployment installations to database.</h2>">>${report}
@@ -310,7 +307,8 @@ function importDeployments() {
   
     if $execute; then
         # Import into db, and update tbsdeployed
-        ${psql} ${dbcxn}  <<EndOfQuery >>"${report}.tmp"
+        IFS=${traditionalIFS}
+        ${psql} ${dbcxn}  <<EndOfQuery | tee -a "${report}.tmp"
         \\timing
         \\set ECHO all
         create temporary table tbtemp as select * from tbsdeployed where false;
@@ -318,6 +316,7 @@ function importDeployments() {
         delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
         insert into tbsdeployed select * from tbtemp on conflict do nothing;
 EndOfQuery
+        IFS=${goodIFS}
 
         local partition=("${bin}/dailytbs.py" ${deploymentsfile})
         ${verbose} && echo "${partition[@]}">>"${report}.tmp"
@@ -327,29 +326,27 @@ EndOfQuery
         awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
         echo '</div>'>>"${report}"
     fi
-    
-    IFS=${goodIFS}
 }
 
 function getRecipientMap() {
     local dailyDir=$1&&shift
     local recipientsmapfile="${dailyDir}/recipients_map.csv"
     local goodIFS=${IFS}
-    IFS=${traditionalIFS}
 
     if $execute; then
         # Extract data from recipients_map table. Used to associate 'community' directory names to recipientid.
-        ${psql} ${dbcxn}  <<EndOfQuery >"${report}.tmp"
+        IFS=${traditionalIFS}
+        ${psql} ${dbcxn}  <<EndOfQuery | tee "${report}.tmp"
         \\timing
         \\set ECHO all
         \COPY (SELECT project, directory, recipientid FROM recipients_map) TO '${recipientsmapfile}' WITH CSV HEADER;
 EndOfQuery
+        IFS=${goodIFS}
+
         echo '<div class="reportline">'>>"${report}"
         awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
         echo '</div>'>>"${report}"
     fi
-
-    IFS=${goodIFS}
 }
 
 function sendMail() {

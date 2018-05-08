@@ -15,5 +15,5 @@ if [ -z "$psql" ]; then
   fi
 fi
 export psql=$psql
-export dbcxn="--host=localhost --port 5432 --username=lb_data_uploader --dbname=dashboard"
+export dbcxn="--host=localhost --port=5432 --username=lb_data_uploader --dbname=dashboard"
 export dropbox=~/tmp

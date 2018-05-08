@@ -41,8 +41,8 @@ function main() {
         printf "___________________________________\n\nPROJECT:${project}\n"
         printf "%s,%s/\n" ${project} ${project} >>"${outputdir}/project_list.csv"
         projectdir=${outputdir}"/${project}"
-        rm -rf ${projectdir}
         mkdir -p ${projectdir}
+        rm ${projectdir}/${project}-*.csv        
 
  #       makeProjectReports ${project}
  #       makeDeploymentReports ${project}
