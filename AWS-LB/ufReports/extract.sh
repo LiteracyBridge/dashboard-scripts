@@ -101,8 +101,8 @@ function getRecent() {
 # This puts 1/3 in p1-3, half the remaining in p2-3, and the rest in p3-3.
 #
 # Categories may also be excluded, by prefixing them with '!':
-p-cated,--lagnuage dga --category !9-0
-
+# p-cated,--language dga --category !9-0
+#
 # When this script runs, the partition ACMs will be created if they don't 
 # already exist. They are given a name like "${acm}.${partition}"
 #
