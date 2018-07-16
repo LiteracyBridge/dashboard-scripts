@@ -150,31 +150,32 @@ function importUserFeedback() {
     local skippedDir=${dailyDir}/recordingsskipped
 
     local cmd
+    set -x
     # Move processed & skipped recordings back to recordingsDir
-    for f in $(cd "${processedDir}"; find . -type d); do
+    for f in $(cd "${processedDir}"; find ${ufProject} -type d); do
         cmd=(mkdir -p "${recordingsDir}/${f}")
         $verbose && echo "${cmd[@]}"
         $execute && "${cmd[@]}"
     done
 
-    for f in $(cd "${processedDir}"; find . -type f); do
+    for f in $(cd "${processedDir}"; find ${ufProject} -type f); do
         cmd=(mv "${processedDir}/${f}" "${recordingsDir}/${f}")
         $verbose && echo "${cmd[@]}"
         $execute && "${cmd[@]}"
     done
 
-    for f in $(cd "${skippedDir}"; find . -type d); do
+    for f in $(cd "${skippedDir}"; find ${ufProject} -type d); do
         cmd=(mkdir -p "${recordingsDir}/${f}")
         $verbose && echo "${cmd[@]}"
         $execute && "${cmd[@]}"
     done
 
-    for f in $(cd "${skippedDir}"; find . -type f); do
+    for f in $(cd "${skippedDir}"; find ${ufProject} -type f); do
         cmd=(mv "${skippedDir}/${f}" "${recordingsDir}/${f}")
         $verbose && echo "${cmd[@]}"
         $execute && "${cmd[@]}"
     done
-
+    set +x
 
     if [ -d "${recordingsDir}" ]; then
         # Capture a list of all the files to be imported
@@ -396,10 +397,11 @@ function readArguments() {
     execute=false
     year=$(date -u +%Y)
     sqloption=''
+    ufProject=''
     if [ $# == 0 ]; then help=true; else help=false; fi
 
     # Day:, Help, Installations, sKip:, Limit:, Month:, No-execute, Stats, Userfeedback, Verbose, -set X, Year:
-    opts=ed:hik:l:m:nsuvxy:z
+    opts=ed:hik:l:m:np:suvxy:z
 
     # Enumerating options
     foundone=false
@@ -414,6 +416,7 @@ function readArguments() {
         l) limit=${OPTARG};;
         m) month=${OPTARG};;
         n) dryrun=true;;
+        p) ufProject=${OPTARG};;
         s) statistics=true;;
         u) userfeedback=true;;
         v) verbose=true;;
@@ -428,6 +431,8 @@ function readArguments() {
        usage
        exit 1
    fi
+
+   $verbose && echo "Limiting UF ufProject to ${ufProject}"
 
    # execute is the opposite of dryrun
     execute=true
