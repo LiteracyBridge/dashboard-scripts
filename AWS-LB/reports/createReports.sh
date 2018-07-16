@@ -44,10 +44,6 @@ function main() {
         mkdir -p ${projectdir}
         rm ${projectdir}/${project}-*.csv        
 
- #       makeProjectReports ${project}
- #       makeDeploymentReports ${project}
- #       makePackageReports ${project}
-
         extractMetadata ${project}
     done
 
@@ -113,82 +109,6 @@ function makeGlobalReports() {
 }
 
 #
-# Reports by project. Queries (xyz.sql) are listed in "reportsByPrj.txt" file.
-function makeProjectReports() {
-    echo "" 
-    echo "  PROJECT REPORTS"
-    
-    local project=$1
-    local projectdir=$(getProjectDir ${project})
-    exportdir="${projectdir}/ALL_DEPLOYMENTS"
-    mkdir -p ${exportdir}
-    
-    for report in `cat ${codebasedir}/reportsByPrj.txt`; do 
-        echo "    REPORT:${report}"
-        ${psql} ${dbcxn} -A -f $sqldir/${report}.sql -v prj=${project} > "${exportdir}/${project}-${report}.csv" 
-    done
-}
-
-#
-# Reports by project, by deployment. Queries are listed in "reportsByDepl.txt" file.
-function makeDeploymentReports() {
-    echo ""
-    echo "  DEPLOYMENT REPORTS"
-
-    local project=$1
-    local deployments=($(${psql} ${dbcxn} -c "SELECT deployment from (SELECT distinct deployment, startdate from packagesindeployment WHERE project ='${project}' ORDER BY startdate DESC, deployment) foo" -t))
-    
-    makeReportsWithItems ${project}  "${codebasedir}/reportsByDepl.txt" depl "${deployments[@]}"
-}
-
-#
-# Reports by project, by package. Queries are listed in "reportsByPkg.txt" file.
-function makePackageReports() {
-    echo "  PACKAGE REPORTS"
-    
-    local project=$1
-    local packages=($(${psql} ${dbcxn} -c "SELECT contentpackage from packagesindeployment WHERE project ='${project}' ORDER BY startdate DESC,contentpackage" -t))
-
-    makeReportsWithItems ${project} "${codebasedir}/reportsByPkg.txt" pkg "${packages[@]}"
-}
-#
-# Iterates over report names from a file, then iterates over a list. 
-# Calls psql to generate the given report, for each item
-#
-# param: project name
-# param: filename containing list of reports
-# param: name of the parameter to be passed to psql ('depl' or 'pkg')
-# rest: list of values to be passed to psql, like -v name=value
-function makeReportsWithItems() {
-    local project="${1}"&& shift
-    local reportlistfile="${1}"&&shift
-    local itemname="${1}"&& shift
-    local items=("${@}")
-    local projectdir=$(getProjectDir ${project})
-
-    for report in $(cat ${reportlistfile}); do
-        echo "    REPORT:${report}"
-
-        local exportdir=${projectdir}"/${report}"
-        mkdir -p ${exportdir}
-        if [ -f "${exportdir}/${project}-${report}-all.csv" ]; then
-            rm "${exportdir}/${project}-${report}-all.csv"
-        fi
-        # We want to accumulate the header line, the first line, from the first .csv, so start the first one at line 1 
-        firstline="+1"
-        for item in "${items[@]}"; do 
-            echo "      ${itemname} item:$item"
-            ${psql} ${dbcxn} -A -f $sqldir/${report}.sql -v prj=${project} -v ${itemname}=${item} > "${exportdir}/${project}-${report}-$item.csv" 
-
-            # Accumulate the .csv into the 'all' .csv file
-            tail -n ${firstline} "${exportdir}/${project}-${report}-${item}.csv" >> "${exportdir}/${project}-${report}-all.csv"
-            # We do not want to accumulate the header line for subsequent .csv files, so start at line 2
-            firstline="+2"
-        done
-    done
-}
-
-#
 # Extracts metadata from database into project database directory (ACM-XYZ)
 function extractMetadata() {
     local project="${1}"&&shift
@@ -201,6 +121,7 @@ function extractMetadata() {
         \\timing
         \\set ECHO queries
         \COPY (SELECT * FROM recipients WHERE recipientid IN (SELECT recipientid FROM recipients_map WHERE project='${project}') ) TO '${metadatadir}/recipients.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM recipients_map WHERE project='${project}') TO '${metadatadir}/recipients_map.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM deployments WHERE project='${project}') TO '${metadatadir}/deployments.csv' WITH CSV HEADER;
 EndOfQuery
     fi
@@ -214,7 +135,7 @@ function runBatchedQueries() {
 echo 'BATCHED PSQL REPORTS'
 $psql $dbcxn <<EndOfQuery >log.txt
 \\timing
-\\set ECHO queries
+\\set ECHO all
 $(cat ${helpers})
 
 $(makePerProjectQueries)
@@ -228,10 +149,14 @@ EndOfQuery
 function rptName() {
     local query=${1}&&shift
     local project=${1}&&shift
+    local prefix=${1}&&shift
 
     printf "${outputdir}/"
     if [ "${project}" != "" ]; then
-        printf "${project}/${project}-"
+        printf "${project}/"
+    fi
+    if [ "${prefix}" != "" ]; then
+        printf "${prefix}-"
     fi
     printf "${query}.csv"
 }

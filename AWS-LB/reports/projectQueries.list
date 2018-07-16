@@ -1,5 +1,6 @@
 deployments
 recipients
+recipients_map
 tbsdeployed
 deployments_by_community
 deployments_by_deployment
