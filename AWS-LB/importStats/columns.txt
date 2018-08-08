@@ -17,5 +17,4 @@ survey_useless
 tbcdid
 stats_timestamp
 deployment_timestamp
-effective_completions
 recipientid
