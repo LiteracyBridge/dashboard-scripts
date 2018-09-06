@@ -1,4 +1,6 @@
 P-DGA1,--language dga --category 9-0 --max 0.5
 P-DGA2,--language dga --category 9-0
-P-DAG1,--language dag --category 9-0 --max 0.5
-P-DAG2,--language dag --category 9-0
+P-DAG1,--language dag --category 9-0 --max 0.25
+P-DAG2,--language dag --category 9-0 --max 0.33
+P-DAG3,--language dag --category 9-0 --max 0.5
+P-DAG4,--language dag --category 9-0
