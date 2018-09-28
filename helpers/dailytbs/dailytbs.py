@@ -49,7 +49,7 @@ def expand_arg_list(arg_list):
             expanded_list.append(arg)
     return expanded_list
 
-# Counts one row, by project, year, month, date
+# Adds 1 to the counter of TBs installed for the project, year, month, date
 def count_row(project):
     global year, month, day, counters
     key = '{},{}-{}-{}'.format(project.upper(), year, month, day)
@@ -99,7 +99,7 @@ def close_outputs():
 
 # Given a project, and assuming that the global year, month, and day variables are set, determine the
 # file to receive lines pertaining to the project. Creates the file if it isn't already open.
-# If the option args.header is set, requires that columns be populated with column names.
+# If the option args.header is set, writes a first line populated with column names.
 def file_for_project(project):
     global args, dropbox, columns, year, month, day, files_opened
     if not args.output_by_dates:

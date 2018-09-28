@@ -90,6 +90,15 @@ def compute_id(string):
 
 
 # If there is an existing recipient.id file in the directory, read and parse it.
+# The file can have arbitrary attributes, where an attribute is a line with
+#    key = value
+# with leading and trailing spaces ignored for key and value. '#' introduces
+# a comment, and blank lines are ignored.
+# Additionally, the attributes can include an arbitrary number of 'alias'
+# attributes, because a community/group might have more than one.
+#
+# The results are returned as a (possibly empty) dictionary of properties other
+# than 'alias', and a (possibly empty) list of aliases.
 def read_existing_recipient_id(directory):
     existing_id = {}
     existing_alias = []
