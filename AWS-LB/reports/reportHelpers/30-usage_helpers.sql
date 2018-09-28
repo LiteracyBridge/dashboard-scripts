@@ -1,100 +1,76 @@
---
--- TODO: Think of some way to test this that doesn't take 5 minutes per test!
---
-
 -- Helpers for usage queries.
 
-SELECT * INTO TEMPORARY TABLE usage_info_base FROM (
-    SELECT
-      s.project,
-      contentpackage           AS package,
-      contentid,
-      village                  AS community,
-      recipientid,
-      talkingbook,
-      played_seconds_max       AS played_seconds,
-      completed_max            AS completions
-    FROM allsources_s s
-    LEFT OUTER JOIN recipients_map rm ON s.project = rm.project AND s.village = rm.directory   
-    GROUP BY
-      s.project,
-      package,
-      contentid,
-      talkingbook,
-      community,
-      recipientid,
-      played_seconds,
-      completions
-) us_info_b;
-
--- This adds the language, title, and duration_seconds from contentmetadata2, and the category from categories.
+-- Adds the languagecode, title, format, and duration_seconds from contentmetadata2, 
+-- order (within playlist) from contentinpackage, and the category (name) from categories.
 SELECT * INTO TEMPORARY TABLE usage_info_base2 FROM (
-    SELECT
-      cs.project,
-      cs.package,
+    SELECT DISTINCT
+      ps.timestamp,
+      ps.project,
+      ps.contentpackage,
       cm.languagecode,
-      cs.community,
-      cs.recipientid,
+      ps.community,
+      ps.recipientid,
       CASE WHEN cat.categoryname:: TEXT~~'General%':: TEXT
         THEN "substring"(cat.categoryname:: TEXT, 9):: CHARACTER VARYING
       ELSE cat.categoryname
       END             AS category,
-      cs.contentid,
+      ps.contentid,
       cm.title,
       cm.format,
       cm.duration_sec AS duration_seconds,
       cp.order as position,
       --Use like: STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
-      cs.talkingbook,
-      cs.played_seconds,
-      cs.completions
-    FROM
-      usage_info_base cs
+      ps.talkingbookid,
+      ps.played_seconds,
+      ps.completed as completions
+    FROM playstatistics ps
       JOIN contentmetadata2 cm
-        ON cs.contentid = cm.contentid AND cs.project=cm.project
+        ON ps.contentid = cm.contentid AND ps.project=cm.project
       JOIN contentinpackage cp
-        ON cs.package = cp.contentpackage AND cs.contentid = cp.contentid
+        ON ps.contentpackage = cp.contentpackage AND ps.contentid = cp.contentid
       JOIN categories cat
         ON cat.categoryid = cp.categoryid AND cat.projectcode=cp.project
 ) us_info_b2;
 
--- This adds the deploymentnumber from deployments, language from language, and
--- partner, affiliate, country, region, and district from recipients.
+-- Adds the language name from language, deploymentnumber and startdate from deployments, 
+-- deployment (name) from packagesindeployment, and partner, affiliate, country, 
+-- region, and district from recipients.
 SELECT * INTO TEMPORARY TABLE usage_info FROM (
-  SELECT
-      pi.project,
-      pi.package,
-      pi.languagecode,
+  SELECT DISTINCT
+      ps.timestamp,
+      ps.project,
+      ps.contentpackage,
+      ps.languagecode,
       l.language,
-      pi.community,
-      pi.recipientid,
+      ps.community,
+      ps.recipientid,
       r.partner,
       r.affiliate,
       r.country,
       r.region,
       r.district,
-      pi.category,
-      pi.contentid,
-      pi.title,
-      pi.format,
-      pi.duration_seconds,
-      pi.position,
-      pi.talkingbook,
-      pi.played_seconds,
-      pi.completions,
+      ps.category,
+      ps.contentid,
+      ps.title,
+      ps.format,
+      ps.duration_seconds,
+      ps.position,
+      ps.talkingbookid,
+      ps.played_seconds,
+      ps.completions,
       pid.deployment,
       d.deploymentnumber,
-      pid.startdate
+      d.startdate
 
     FROM
-      usage_info_base2 pi
+      usage_info_base2 ps
       JOIN packagesindeployment pid
-        ON pid.project=pi.project AND pid.contentpackage = pi.package
+        ON pid.project=ps.project AND pid.contentpackage = ps.contentpackage
       JOIN deployments d
-        ON d.project=pi.project AND d.deployment = pid.deployment
-      JOIN languages l ON l.projectcode = pi.project AND l.languagecode = pi.languagecode
+        ON d.project=ps.project AND d.deployment = pid.deployment
+      JOIN languages l ON l.projectcode = ps.project AND l.languagecode = ps.languagecode
       LEFT OUTER JOIN recipients r
-        ON pi.recipientid = r.recipientid
+        ON ps.recipientid = r.recipientid
 
  ) us_info;
 
@@ -103,21 +79,105 @@ SELECT * INTO TEMPORARY TABLE usage_info FROM (
 SELECT * INTO TEMPORARY TABLE package_tbs_used FROM (
     SELECT DISTINCT
       project,
-      contentpackage  AS package,
-      count(DISTINCT talkingbook) AS package_tbs_used
-    FROM allsources_s
-    GROUP BY project, package
+      contentpackage,
+      count(DISTINCT talkingbookid) AS package_tbs_used
+    FROM playstatistics
+    GROUP BY project, contentpackage
 ) pkg_tbs_used;
+
+
+
+-- Usage by project / deployment / package / language / category / message / TB
+-- SELECT * INTO TEMPORARY TABLE usage_by_tb FROM (
+--     SELECT DISTINCT
+--       ps.project,
+--       STRING_AGG(DISTINCT ps.deployment, ';') AS deployment,
+--       ps.deploymentnumber,
+--       ps.startdate,
+--       ps.contentpackage,
+--       languagecode,
+--       language,
+--       talkingbookid,
+--       COUNT(DISTINCT category)           AS num_categories,
+--       STRING_AGG(DISTINCT category, ';') AS category_list,
+--       contentid,
+--       title,
+--       format,
+--       STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
+--       round(duration_seconds/60.0, 1)    AS duration_minutes,
+--       round(sum(played_seconds)/60.0, 1) AS played_minutes,
+--       round(sum(played_seconds)/60.0/greatest(MAX(package_tbs_used), 1), 1)
+--                                          AS played_minutes_per_tb,
+--       sum(completions)                   AS completions,
+--       round(sum(completions)/greatest(MAX(package_tbs_used), 1), 1)
+--                                          AS completions_per_tb,
+--       MAX(ptb.package_tbs_used)          AS num_package_tbs,
+--       ROUND(100.0*count(DISTINCT talkingbookid)/greatest(MAX(package_tbs_used), 1), 0)
+--                                          AS percent_tbs_playing
+--     FROM
+--       usage_info ps
+--       JOIN package_tbs_used ptb
+--         ON ptb.project=ps.project AND ptb.contentpackage = ps.contentpackage
+--     GROUP BY
+--       ps.project,
+--       ps.deploymentnumber,
+--       ps.startdate,
+--       ps.contentpackage,
+--       languagecode,
+--       language,
+--       talkingbookid,
+--       contentid,
+--       title,
+--       format,
+--       duration_seconds
+--     ORDER BY project, startdate, contentpackage, talkingbookid, title
+-- ) us_by_tbg;
+
+-- Usage by project / deployment / package / language / category / message / TB
+-- SELECT * INTO TEMPORARY TABLE usage_by_recipient FROM (
+--     SELECT DISTINCT
+--       ps.project,
+--       STRING_AGG(DISTINCT ps.deployment, ';') AS deployment,
+--       ps.deploymentnumber,
+--       ps.startdate,
+--       ps.contentpackage,
+--       languagecode,
+--       language,
+--       COUNT(DISTINCT talkingbookid)      AS num_tbs,
+--       COUNT(DISTINCT category)           AS num_categories,
+--       STRING_AGG(DISTINCT category, ';') AS category_list,
+--       contentid,
+--       title,
+--       format,
+--       duration_seconds,
+--       recipientid,
+--       STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
+--       round(sum(played_seconds)/60.0, 1) AS played_minutes,
+--       sum(completions)                   AS completions
+--     FROM
+--       usage_info ps
+--     GROUP BY
+--       ps.project,
+--       ps.deploymentnumber,
+--       ps.startdate,
+--       ps.contentpackage,
+--       languagecode,
+--       language,
+--       contentid,
+--       title,
+--       format,
+--       duration_seconds,
+--       recipientidcd
+--     ORDER BY project, startdate, contentpackage, title
+-- ) us_by_recip;
 
 -- Usage by project / deployment / package / language / category / message
 SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
     SELECT DISTINCT
-      ci.project,
-      --ci.deployment,
-      STRING_AGG(DISTINCT ci.deployment, ';') AS deployment,
-      ci.deploymentnumber,
-      ci.startdate,
-      ci.package,
+      ps.project,
+      STRING_AGG(DISTINCT ps.deployment, ';') AS deployment,
+      ps.deploymentnumber,
+      ps.contentpackage,
       languagecode,
       language,
       COUNT(DISTINCT category)           AS num_categories,
@@ -133,27 +193,25 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
       sum(completions)                   AS completions,
       round(sum(completions)/greatest(MAX(package_tbs_used), 1), 1)
                                          AS completions_per_tb,
-      count(DISTINCT talkingbook)        AS num_tbs,
+      count(DISTINCT talkingbookid)      AS num_tbs,
       MAX(ptb.package_tbs_used)          AS num_package_tbs,
-      ROUND(100.0*count(DISTINCT talkingbook)/greatest(MAX(package_tbs_used), 1), 0)
+      ROUND(100.0*count(DISTINCT talkingbookid)/greatest(MAX(package_tbs_used), 1), 0)
                                          AS percent_tbs_playing
     FROM
-      usage_info ci
+      usage_info ps
       JOIN package_tbs_used ptb
-        ON ptb.project=ci.project AND ptb.package = ci.package
+        ON ptb.project=ps.project AND ptb.contentpackage = ps.contentpackage
     GROUP BY
-      ci.project,
-      --ci.deployment,
-      ci.deploymentnumber,
-      ci.startdate,
-      ci.package,
+      ps.project,
+      ps.deploymentnumber,
+      ps.contentpackage,
       languagecode,
       language,
       contentid,
       title,
       format,
       duration_seconds
-    ORDER BY project, startdate, package, title
+    ORDER BY project, contentpackage, title
 ) us_by_msg;
 
 
@@ -162,10 +220,8 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
     SELECT DISTINCT
       cats.project,
       cats.deploymentnumber,
-      --cats.deployment,
       STRING_AGG(DISTINCT cats.deployment, ';') AS deployment,
-      cats.startdate,
-      cats.package,
+      cats.contentpackage,
       cats.languagecode,
       cats.language,
       cats.category,
@@ -183,7 +239,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
           deploymentnumber,
           deployment,
           startdate,
-          package,
+          contentpackage,
           languagecode,
           language,
           category,
@@ -195,7 +251,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
           deploymentnumber,
           deployment,
           startdate,
-          package,
+          contentpackage,
           languagecode,
           language,
           category,
@@ -207,60 +263,55 @@ SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
       (SELECT DISTINCT
          project,
          deploymentnumber,
-         package,
+         contentpackage,
          category,
-         count(talkingbook)          AS all_tbs,
-         count(DISTINCT talkingbook) AS cat_tbs,
-         sum(played_seconds)         AS played_seconds,
-         sum(completions)            AS completions
+         count(talkingbookid)          AS all_tbs,
+         count(DISTINCT talkingbookid) AS cat_tbs,
+         sum(played_seconds)           AS played_seconds,
+         sum(completions)              AS completions
        FROM usage_info
-       GROUP BY project, deploymentnumber, package, category
+       GROUP BY project, deploymentnumber, contentpackage, category
       ) tbinfo
         ON tbinfo.project=cats.project AND tbinfo.deploymentnumber=cats.deploymentnumber
-           AND tbinfo.package ilike cats.package AND tbinfo.category ilike cats.category
+           AND tbinfo.contentpackage ilike cats.contentpackage AND tbinfo.category ilike cats.category
       JOIN
       package_tbs_used ptb
-        ON ptb.project=cats.project AND ptb.package ilike cats.package
+        ON ptb.project=cats.project AND ptb.contentpackage ilike cats.contentpackage
 
     GROUP BY cats.project,
-      --cats.deployment,
       cats.deploymentnumber,
-      cats.startdate,
-      cats.package,
+      cats.contentpackage,
       cats.languagecode,
       cats.language,
       cats.category
-    ORDER BY project, startdate, category
+    ORDER BY project
+        ,category
 ) us_by_pkg_cat;
-
 
 
 -- Usage at a by project and deployment.
 SELECT * INTO TEMPORARY TABLE usage_by_deployment FROM (
     SELECT DISTINCT
       project,
-      --deployment,
       STRING_AGG(DISTINCT deployment, ';') AS deployment,
       deploymentnumber,
       startdate,
-      COUNT(DISTINCT package)            AS num_packages,
+      COUNT(DISTINCT contentpackage)     AS num_packages,
       COUNT(DISTINCT languagecode)       AS num_languages,
       COUNT(DISTINCT community)          AS num_communities,
       COUNT(DISTINCT recipientid)        AS num_recipients,
       COUNT(DISTINCT category)           AS num_categories,
       COUNT(DISTINCT contentid)          AS num_messages,
-      COUNT(DISTINCT talkingbook)        AS num_tbs,
+      COUNT(DISTINCT talkingbookid)      AS num_tbs,
       ROUND(SUM(played_seconds)/60.0, 2) AS played_minutes,
       SUM(completions)                   AS num_completions
 
     FROM usage_info ui
     GROUP BY project,
-        --deployment,
         deploymentnumber,
         startdate
     ORDER BY project, startdate
 ) us_by_depl;
-
 
 
 -- Report the last 4 usage counts for every project
@@ -284,4 +335,5 @@ CREATE OR REPLACE TEMP VIEW usage_dashboard AS (
     WHERE
       extract.row<=4
 );
+
 
