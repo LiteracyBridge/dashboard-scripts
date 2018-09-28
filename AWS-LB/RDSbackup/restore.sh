@@ -35,13 +35,15 @@ else
 fi
 
 killall pgAdmin3
+killall datagrip
+sleep 2
 dbcxn="--host=localhost --port 5432 --username=lb_data_uploader --dbname=dashboard"
 
 echo "Recreating database..."
-$psql ${dbcxn%--user*} < schema.sql
+time $psql ${dbcxn%--user*} < schema.sql
 echo "."
 echo "Restoring data. This will take a few minutes..."
-time $pgrestore ${dbcxn} -Fc database.data
-echo "Rematerializing contentstatistics"
-time $psql ${dbcxn} -c 'REFRESH MATERIALIZED VIEW contentstatistics;'
+time $pgrestore ${dbcxn} -Fc -j 4 database.data
+#echo "Rematerializing contentstatistics"
+#time $psql ${dbcxn} -c 'REFRESH MATERIALIZED VIEW contentstatistics;'
 
