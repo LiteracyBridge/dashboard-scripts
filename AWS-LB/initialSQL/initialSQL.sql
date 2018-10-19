@@ -1,4 +1,4 @@
-﻿--This takes 30-45 minutes 
+﻿    --This takes 30-45 minutes 
 
 -- update case in these smaller tables
 update categoriesinpackage
@@ -37,11 +37,11 @@ order by packageid;
 
 
 delete from tbcollections;
-insert into tbcollections
-(select distinct contentpackage,village,talkingbook from syncaggregation
-union
-select distinct packageid as contentpackage,village,talkingbookid as talkingbook from playedevents);
+--insert into tbcollections
+--(select distinct contentpackage,village,talkingbook from syncaggregation
+--union
+--select distinct packageid as contentpackage,village,talkingbookid as talkingbook from playedevents);
 
 
 delete from allsources_s;
-insert into allsources_s select * from allsources;
+--insert into allsources_s select * from allsources;

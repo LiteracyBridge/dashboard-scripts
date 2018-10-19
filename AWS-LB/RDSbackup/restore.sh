@@ -34,9 +34,18 @@ else
     exit 99 
 fi
 
-killall pgAdmin3
-killall datagrip
-sleep 2
+looking=true
+while $looking; do
+  looking=false
+  killall datagrip 2>/dev/null
+  if [ $? -eq 0 ]; then echo killed datagrip; looking=true; fi
+  killall pgAdmin3 2>/dev/null
+  if [ $? -eq 0 ]; then echo killed ppgAdmin3; looking=true; fi 
+  killall psql 2>/dev/null
+  if [ $? -eq 0 ]; then echo killed psql; looking=true; fi
+  if $looking ; then sleep 2; fi
+done
+
 dbcxn="--host=localhost --port 5432 --username=lb_data_uploader --dbname=dashboard"
 
 echo "Recreating database..."

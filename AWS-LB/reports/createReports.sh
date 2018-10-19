@@ -32,7 +32,6 @@ globalQueries="${codebasedir}/globalQueries.list"
 #
 # Main function (call is at end of file)
 function main() {
-#    makeGlobalReports
 
     printf "project,path\n" > "${outputdir}/project_list.csv"
     projects=($(${psql} ${dbcxn} -c "SELECT projectcode from projects WHERE id >= 0" -t))
@@ -93,26 +92,14 @@ function getProjectDir() {
     echo "${outputdir}/$1"
 }
 
-#
-# Global reports, across all projects
-function makeGlobalReports() {
-    echo "CROSS-PROJECT REPORTS"
-
-    projectdir=$(getProjectDir ALL_PROJECTS)
-    mkdir -p ${projectdir}
-    for report in $(cat ${codebasedir}/reportsByAll.txt); do 
-        echo "  REPORT:${report}"
-
-        exportdir=${projectdir}
-        ${psql} ${dbcxn} -A -f $sqldir/${report}.sql > "${exportdir}/${report}.csv" 
-    done
-}
 
 #
 # Extracts metadata from database into project database directory (ACM-XYZ)
 function extractMetadata() {
     local project="${1}"&&shift
     local metadatadir="${dropbox}/ACM-${project}/TB-Loaders/metadata"
+    local programspecdir="${dropbox}/ACM-${project}/programspec"
+    mkdir -p ${programspecdir}
     if [ -d "${dropbox}/ACM-${project}/TB-Loaders" ]; then
         echo "Extract metadata for ${project} to ${metadatadir}"
         mkdir -p "${metadatadir}"
@@ -120,6 +107,10 @@ function extractMetadata() {
         ${psql} ${dbcxn}  <<EndOfQuery 
         \\timing
         \\set ECHO queries
+        \COPY (SELECT * FROM recipients WHERE project='${project}')     TO '${programspecdir}/recipients.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM recipients_map WHERE project='${project}') TO '${programspecdir}/recipients_map.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM deployments WHERE project='${project}')    TO '${programspecdir}/deployments.csv' WITH CSV HEADER;
+
         \COPY (SELECT * FROM recipients WHERE recipientid IN (SELECT recipientid FROM recipients_map WHERE project='${project}') ) TO '${metadatadir}/recipients.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM recipients_map WHERE project='${project}') TO '${metadatadir}/recipients_map.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM deployments WHERE project='${project}') TO '${metadatadir}/deployments.csv' WITH CSV HEADER;

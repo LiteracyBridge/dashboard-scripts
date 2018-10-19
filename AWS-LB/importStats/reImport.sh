@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 traditionalIFS="$IFS"
 IFS="`printf '\n\t'`"
 goodIFS="${IFS}"
@@ -23,11 +23,9 @@ function setDefaults() {
     fi
     if [ -z "${dbcxn-}" ]; then
       dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
-      echo "dbcxn is ${dbcxn}"
     fi
     if [ -z "${dropbox-}" ]; then
       dropbox=~/Dropbox
-      echo "Dropbox in ${dropbox}"
     fi
 
     if [ -z "${bin-}" ]; then
@@ -36,17 +34,19 @@ function setDefaults() {
     if [ -z "${core-}" ]; then
       # This lets us test new versions of core-with-deps.jar more easily.
       core=${dropbox}/AWS-LB/bin/core-with-deps.jar
-      echo "core is ${core}"
     fi
     if [ -z "${acm-}" ]; then
         acm=${dropbox}/LB-software/ACM-install/ACM/software
-        echo "acm is ${acm}"
     fi
     if [ -z "${email-}" ]; then
         email=${dropbox}/AWS-LB/bin/sendses.py
-        echo "email is ${email}"
     fi
    
+    echo "dbcxn is ${dbcxn}"
+    echo "Dropbox in ${dropbox}"
+    echo "core is ${core}"
+    echo "acm is ${acm}"
+    echo "email is ${email}"
     report=importStats.html
     rm ${report}
     echo "$(date)">${report}
