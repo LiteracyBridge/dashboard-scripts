@@ -8,7 +8,7 @@ from pathlib import Path
 
 import boto3
 
-DEFAULT_STAGING_DIRECTORY = '~/DeploymentsToS3Sync'
+DEFAULT_STAGING_DIRECTORY = '~/work/DeploymentsToS3Sync'
 DEFAULT_DROPBOX_DIRECTORY = '~/Dropbox (Literacy Bridge)'
 
 usage = '''Update latest Deployments from Dropbox to S3.'''
