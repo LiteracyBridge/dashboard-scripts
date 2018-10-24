@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 '''
 Small utility to send email via Amazon ses. From & to addresses, & subject are
 specified via command line options. Body text provided in a file or stdin. If
@@ -52,7 +52,7 @@ def send_ses(fromaddr,
         Message=message
     )
 
-    print response
+    print(response)
 
 # Reads the file specified by --body, else stdin
 def get_body_text():

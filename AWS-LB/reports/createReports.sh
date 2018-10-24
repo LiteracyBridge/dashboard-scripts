@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # uncomment next line for script debugging
 #set -x
 

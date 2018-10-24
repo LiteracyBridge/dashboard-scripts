@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 traditionalIFS="$IFS"
 IFS="`printf '\n\t'`"
 goodIFS="$IFS"

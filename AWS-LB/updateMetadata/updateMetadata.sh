@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # This script extracts metadata from project specific ACM directories and updates RDS.
 # From ACM, it updates contentmetadata2, categories, and languages.
@@ -6,7 +6,7 @@
 
 #CONFIGURATION
 # uncomment next line for script debugging
-# set -x
+#set -x
 
 if [ -z "$psql" ]; then
     if [ -e /Applications/Postgres.app/Contents/Versions/9.5/bin/psql ]; then
@@ -32,10 +32,10 @@ fi
 echo "Processing stats with dropbox:$dropbox, psql:$psql, dbcxn:$dbcxn"
 echo "acm: $acm"
 
-exportdir=$dropbox/AWS-LB/updateMetadata/ACMexports/
-exportdir=${exportdir%/}
+exportdir=$dropbox/AWS-LB/updateMetadata/ACMexports
 
 # Get list of projects (ACM DBs) from database projects table
+declare -a projects
 projects=($($psql $dbcxn -c "SELECT projectcode from projects WHERE id >= 0" -t))
 
 #create a single line from list of projects to pass as parameter to jar
