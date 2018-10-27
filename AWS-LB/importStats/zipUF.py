@@ -10,8 +10,11 @@ from pathlib import Path
 usage = '''Move user feedback files into .zips, to eliminate huge numbers of files (there is no 
 significant compression).'''
 
+args = None
+
 UF_DIR_NAMES = ['userrecordings', 'recordingsprocessed', 'recordingsskipped']
 totals = {x: 0 for x in UF_DIR_NAMES}
+
 
 # Given a year-month-day, return the path the the daily collected-data-processed file.
 def collected_data_path(year=None, month=None, day=None):
@@ -50,17 +53,39 @@ def move_dir_to_zip_file(from_path, to_path, name):
     all_zipped += files_zipped
     return files_zipped
 
+
 # Move any user recording files to .zip archives.
 def move_to_zips(processed_day_path, from_paths):
-    global temp_dir
+    global temp_dir, all_unzipped
     files_zipped = 0
     for uf_name in UF_DIR_NAMES:
         if uf_name in from_paths and from_paths[uf_name] is not None:
             files_zipped += move_dir_to_zip_file(from_paths[uf_name], processed_day_path, uf_name)
+    all_unzipped += files_zipped
     return files_zipped
+
+
+# Unzip any .zip archives to corresponding directories.
+def move_zips_to_dirs(processed_day_path, zip_paths):
+    global temp_dir
+    files_unzipped = 0
+    for uf_name in UF_DIR_NAMES:
+        if uf_name in zip_paths and zip_paths[uf_name] is not None:
+            #files_unzipped += move_dir_to_zip_file(zip_paths[uf_name], processed_day_path, uf_name)
+            unzip_dir = Path(processed_day_path, uf_name)
+            os.makedirs(unzip_dir)
+            shutil.unpack_archive(str(zip_paths[uf_name]), str(unzip_dir))
+            nf = 0
+            for root, dirs, files in os.walk(unzip_dir):
+                nf += len(files)
+            files_unzipped += nf
+            os.remove(zip_paths[uf_name])
+    return files_unzipped
+
 
 # This is really the main function -- look for user recordings, and zip them into archives.
 def process_directory(year, month, day, processed_day_path):
+    global args
     # Get any YYYYyMMmDDdHHhMMmSSs directories. There can be more than one, but at most one should ever have
     # user recordings in it.
     ts_path = '{}y{}m{}d'.format(year, month, day)
@@ -68,8 +93,10 @@ def process_directory(year, month, day, processed_day_path):
 
     have_conflicts = False
     have_files = False
+    have_zips = False
     counts = {x: 0 for x in UF_DIR_NAMES}
     from_paths = {x: None for x in UF_DIR_NAMES}
+    zip_paths = {x: None for x in UF_DIR_NAMES}
 
     # For each of the dispositions of user recordings that we care about...
     for uf_name in UF_DIR_NAMES:
@@ -81,8 +108,10 @@ def process_directory(year, month, day, processed_day_path):
             from_paths[uf_name] = path
             num_found += 1
         # also check for .zip file
-        if Path(processed_day_path, uf_name + '.zip').exists():
+        path = Path(processed_day_path, uf_name + '.zip')
+        if path.exists():
             zip_found = True
+            zip_paths[uf_name] = path
             print('Found existing {}.zip file in {}'.format(uf_name, processed_day_path))
         # Are there any directories in any of the timestamp directories?
         for ts_dir in ts_dirs:
@@ -94,16 +123,21 @@ def process_directory(year, month, day, processed_day_path):
         counts[uf_name] += num_found
         totals[uf_name] += num_found
         have_files |= num_found > 0
+        have_zips |= zip_found
         if num_found > 1 or num_found == 1 and zip_found:
             have_conflicts = True
             print('Conflicting {} files in {}'.format(uf_name, processed_day_path))
 
     # If we're good to go, go.
-    if have_files and not have_conflicts:
+    if not have_conflicts:
         start = timer()
-        files_zipped = move_to_zips(processed_day_path, from_paths)
+        files_processed = 0
+        if have_files and not args.unzip:
+            files_processed = move_to_zips(processed_day_path, from_paths)
+        elif have_zips and args.unzip:
+            files_processed = move_zips_to_dirs(processed_day_path, zip_paths)
         end = timer()
-        print('Zipped {} files in {:.2f} seconds'.format(files_zipped, end-start))
+        print('{}ipped {} files in {:.2f} seconds'.format('Unz' if args.unzip else 'Z', files_processed, end - start))
 
 
 # Given a year, month, and a list of days, process the days.
@@ -172,8 +206,9 @@ def find_years():
 
 
 def main():
-    global args, dropbox, temp_dir, all_zipped
+    global args, dropbox, temp_dir, all_zipped, all_unzipped
     arg_parser = argparse.ArgumentParser(description="Move UF files to .zips", usage=usage)
+    arg_parser.add_argument('--unzip', default=False, action='store_true', help='Unzip directories.')
     arg_parser.add_argument('--year', nargs='*', help='Year(s) to process. Default: all years found.')
     arg_parser.add_argument('--month', nargs='*',
                             help='Month(s) to process (applies to every year). Default: all months found.')
@@ -183,6 +218,7 @@ def main():
     args = arg_parser.parse_args()
     dropbox = os.path.expanduser(args.dropbox)
     all_zipped = 0
+    all_unzipped = 0
 
     years = find_years()
 
@@ -192,7 +228,11 @@ def main():
         start = timer()
         process_years(years)
         end = timer()
-        print('Zipped {} total files in {:0.2f} seconds'.format(all_zipped, end-start))
+        if args.unzip:
+            print('Unzipped {} total files in {:0.2f} seconds'.format(all_unzipped, end - start))
+        else:
+            print('Zipped {} total files in {:0.2f} seconds'.format(all_zipped, end - start))
+
 
     print(totals)
 
