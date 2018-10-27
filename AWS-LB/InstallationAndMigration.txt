@@ -1,0 +1,47 @@
+Installation and Migration of Amplio Server
+===========================================
+
+This documents how to install the server component of Amplio software, and how to migrate
+from one server to another. Installation is the same in either case, the difference
+being in preparation work prior to migration.
+
+Installation
+============
+1) Install and configure a modern Linux server. The specific host and the distro are not
+particularly important; the only real variation would be which packages are installed
+by default.
+
+2) Install Dropbox, and configure it to run as processing@. You may need to install
+python 2.7 for the dropbox.py utility, to check status, etc. Install Dropbox first,
+because it will take several DAYS to sync.
+
+3) Install AWS CLI if necessary, and configure a user with appropriate access (config
+and credentials files in the ~/.aws directory). config may look like this
+	[default]
+	region = us-west-2
+and credentials should look like this
+	[default]
+	aws_access_key_id = 
+	aws_secret_access_key = 
+
+4) Install and configure psql. On Ubuntu 18.04, this was
+	sudo apt install postgresql-client-common
+	sudo apt install postgresql-client-10
+Run psql --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432
+			--username=lb_data_uploader --dbname=dashboard
+and ensure that the connection works.
+
+5) Create directories
+	dashboardreports
+	ufreports
+Optionally, rsync the contents from the previous server. Not strictly necessary, as 
+the contents will be recreated.
+
+6) Install the AWS python libraries, with 'pip3 install boto3'. May need to install pip3 
+first.
+
+7) Install JRE. Note that the stats import process does not work with jre 10. Install
+openjdk-8.
+
+At this point one can start hand-running the jobs in the cron job set. When they're all
+working, start cron with the cron/crontab.txt file.
