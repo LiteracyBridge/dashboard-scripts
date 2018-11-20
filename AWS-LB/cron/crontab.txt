@@ -1,8 +1,10 @@
 # Run cronjob.sh at 0400 utc
-0 4 * * * cron/cronjob.sh
+0 4 * * * cron/cronjob.sh >cron/cronjob.log 2>&1
 
 # Run cronContent.sh every 5 minutes
-*/5 * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >DeploymentsToS3Sync/log/log.txt 2>&1
+*/5 * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1
 
 # Run cronjob every minute, for testing
 #* * * * * /home/ubuntu/cron/DeploymentsToS3Sync/cronjob.sh
+#* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/template.sh cron/cronvars.sh
+#* * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1
