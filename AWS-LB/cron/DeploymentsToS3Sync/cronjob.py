@@ -20,7 +20,7 @@ dropbox = None
 staging = None
 
 report = ['Checking for new deployments at {}'.format(datetime.datetime.now())]
-
+found_deployments = {}
 
 def error(msg):
     report.append('ERROR: {}'.format(msg))
@@ -130,7 +130,7 @@ def cannonical_acm_name(project):
 # published deployment). If that is different from the staging directory, copy
 # to the staging directory, and return relevant information to update to s3.
 def check_acm_for_update(acmdir):
-    global dropbox, staging, report
+    global dropbox, staging, report, found_deployments
     result = None
     project = cannonical_project_name(acmdir)
     published = Path(dropbox, acmdir, 'TB-Loaders', 'published')
@@ -152,6 +152,7 @@ def check_acm_for_update(acmdir):
         error('Project {} has too many .rev files ({}).'.format(project, len(rev)))
         return
     deployment = rev[0].name[0:-4]
+    found_deployments[project] = deployment
 
     content_dir = Path(published, deployment)
     if not (content_dir.exists() and content_dir.is_dir()):
@@ -223,7 +224,7 @@ def get_acm_list(given_projects):
     return acm_dirs
 
 def status_check(need_report):
-    global staging, args
+    global staging, args, found_deployments
     date_format = '%Y-%m-%d %H:%M:%S.%f'
     now = datetime.datetime.now()
     then_file = Path(staging, 'status_check.txt')
@@ -244,6 +245,15 @@ def status_check(need_report):
         with open(then_file, 'w') as tf:
             then_str = now.strftime(date_format)
             print(then_str, file=tf)
+
+        report.append('')
+        report.append('Current deployments:')
+        proj_width = max([len(p) for p in found_deployments.keys()])
+        depl_width = max([len(p) for p in found_deployments.values()])
+        report.append('{:>{pw}} : {:<{dw}}'.format('Project', 'Deployment', pw=proj_width, dw=depl_width))
+        report.append('{:->{pw}}-+-{:-<{dw}}'.format('', '', pw=proj_width, dw=depl_width))
+        for p,d in found_deployments.items():
+            report.append('{:>{pw}} : {:<{dw}}'.format(p, d, pw=proj_width, dw=depl_width))
 
     return need_report
 
