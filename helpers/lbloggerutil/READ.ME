@@ -1,0 +1,59 @@
+==================================================================================
+LBUtilityLogger
+lbloggerutil.py
+
+Christian Schmid - schmid.chris@gmail.com
+==================================================================================
+
+
+1. Scope
+At Amplio there are several batch processes run on an EC2 instance (Linux). In order
+to monitor the state of these scripts, this utility was developed. This utility
+captures all stderr and stdout messages and logs these in a separate log file.
+
+2. Usage
+
+2.1 System requirements
+- Python version 3.6 is required
+- Linux system
+- Python libraries:
+    - subprocess
+    - sys
+    - datetime
+    - time
+    - argparse
+
+2.2 Input
+Input parameters can be requested using python3 lbloggerutil.py -h
+
+usage: lbloggerutil.py [-h] [--logdir LOGDIR] [--timestamp]
+                       executable [program_args [program_args ...]]
+
+positional arguments:
+  executable       The executable to be run by this script
+  program_args     The arguments of the executable
+
+optional arguments:
+  -h, --help       show this help message and exit
+  --logdir LOGDIR  Specify logging directory
+  --timestamp      Add current timestamp in filenames of stdout and stderr
+                   logs
+
+
+2.3 Output
+The utility generates the following log files with every run:
+- <program_name>_utility.log
+    - program name
+    - program arguments
+    - program directory
+    - utility log location
+    - stdout log location
+    - stderr log location
+    - program exit code
+- <program_name>_stdout_<timestamp>.log
+    Contains the complete stdout log of the utility and the program. Additionally, the exit code of the program
+    is included.
+    If the optional argument --timestamp is passed, the current timestamp is added to the filename.
+- <program_name>_stderr_<timestamp>.log
+    Contains the complete stderr log of the utility and the program.
+    If the optional argument --timestamp is passed, the current timestamp is added to the filename.
