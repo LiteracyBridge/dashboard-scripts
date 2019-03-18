@@ -32,6 +32,9 @@ function configure() {
         exit 1;
     fi
 
+    dr_arg=""
+    $dryrun && dr_arg="--dryrun"
+
     report=report.txt
     echo "Moving files @ $(date)">${report}
 }
@@ -41,9 +44,7 @@ function main() {
     setDefaults
     configure || exit 1
 
-    mover "${inboxdir}" "${outboxdir}"
-    
-    $summary && echo "${filesmoved} files moved.">>${report}
+    ./dropboxmover.py --dropbox "${dropbox}" ${dr_arg} >>${report}
 
     $execute && ${email} --subject 'Dropbox files moved' --body ${report}
 
