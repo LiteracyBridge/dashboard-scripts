@@ -29,10 +29,10 @@ def error(msg):
 # Format and send an ses message. Options are
 # html    - if true, send as html format
 # dry_run - if true, do not actually send email
-def send_ses(fromaddr='ictnotifications@literacybridge.org',
+def send_ses(fromaddr='ictnotifications@amplio.org',
              subject='',
              body_text='',
-             recipient='ictnotifications@literacybridge.org'):
+             recipient='ictnotifications@amplio.org'):
     """Send an email via the Amazon SES service.
 
     Example:

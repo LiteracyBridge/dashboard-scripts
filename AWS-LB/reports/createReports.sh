@@ -41,7 +41,7 @@ function main() {
         printf "%s,%s/\n" ${project} ${project} >>"${outputdir}/project_list.csv"
         projectdir=${outputdir}"/${project}"
         mkdir -p ${projectdir}
-        rm ${projectdir}/${project}-*.csv        
+        #rm ${projectdir}/${project}-*.csv        
 
         extractMetadata ${project}
     done
@@ -103,7 +103,7 @@ function extractMetadata() {
     if [ -d "${dropbox}/ACM-${project}/TB-Loaders" ]; then
         echo "Extract metadata for ${project} to ${metadatadir}"
         mkdir -p "${metadatadir}"
-        # Extract data from recipientstable.
+        # Extract data from recipients table.
         ${psql} ${dbcxn}  <<EndOfQuery 
         \\timing
         \\set ECHO queries
@@ -111,9 +111,9 @@ function extractMetadata() {
         \COPY (SELECT * FROM recipients_map WHERE project='${project}') TO '${programspecdir}/recipients_map.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM deployments WHERE project='${project}')    TO '${programspecdir}/deployments.csv' WITH CSV HEADER;
 
-        \COPY (SELECT * FROM recipients WHERE recipientid IN (SELECT recipientid FROM recipients_map WHERE project='${project}') ) TO '${metadatadir}/recipients.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM recipients WHERE project='${project}')     TO '${metadatadir}/recipients.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM recipients_map WHERE project='${project}') TO '${metadatadir}/recipients_map.csv' WITH CSV HEADER;
-        \COPY (SELECT * FROM deployments WHERE project='${project}') TO '${metadatadir}/deployments.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM deployments WHERE project='${project}')    TO '${metadatadir}/deployments.csv' WITH CSV HEADER;
 EndOfQuery
     fi
 }

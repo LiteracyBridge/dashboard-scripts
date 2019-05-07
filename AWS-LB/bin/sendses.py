@@ -31,6 +31,8 @@ def send_ses(fromaddr,
       return the message, otherwise return an empty '' string.
     """
 
+    print('Sending "{}" from "{}" to "{}"'.format(subject, fromaddr, recipient))
+
     message = {'Subject': {'Data': subject}}
     if options.html:
         message['Body'] = {'Html': {'Data': body_text}}

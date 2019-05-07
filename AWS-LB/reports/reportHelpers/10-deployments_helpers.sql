@@ -244,6 +244,17 @@ CREATE OR REPLACE TEMP VIEW deployment_date_mismatch AS (
     WHERE numstarts!=1 OR numends!=1
 );
 
+CREATE OR REPLACE TEMP VIEW deployment_spec AS (
+    SELECT * FROM (
+      SELECT distinct project,
+        deploymentnumber as deployment_num,
+        startdate,
+        enddate,
+        component,
+        concat(project, '-', cast(extract(year from startdate)as integer)%100, '-', deploymentnumber) as name
+      FROM deployments
+    ) d
+);
 
   -- Report the last 4 deployments per project
 CREATE OR REPLACE TEMP VIEW deployment_dashboard AS (
