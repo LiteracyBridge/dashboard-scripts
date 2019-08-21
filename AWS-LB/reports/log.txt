@@ -1,0 +1,1554 @@
+Timing is on.
+--
+-- DEPLOYMENT QUERY: reports on how messages are deployed
+--
+-- Selects the columns we care about
+--SELECT * INTO TEMPORARY TABLE update_operation_info FROM (
+--    SELECT
+--      project,
+--      outdeployment AS deployment,
+--      outimage      AS package,
+--      outcommunity  AS community,
+--      outsn         AS talkingbook
+--    FROM tbdataoperations
+--    WHERE
+--      action ILIKE 'update%'
+--    GROUP BY project, deployment, package, community, talkingbook
+--    ORDER BY outdeployment, outcommunity, package
+--) update_op_i;
+-- Add basic recipient info to tbsdeployed
+SELECT * INTO TEMPORARY TABLE tbs_deployed_info FROM (
+    SELECT DISTINCT 
+        td.project, 
+        deployment, 
+        contentpackage as package,
+        td.recipientid, 
+        r.communityname, 
+        r.groupname,
+        r.language as languagecode,
+        talkingbookid
+    FROM tbsdeployed td
+    JOIN recipients r
+      ON td.recipientid = r.recipientid
+    GROUP BY td.project, 
+    deployment, 
+    package, 
+    td.recipientid, 
+    communityname, 
+    groupname, 
+    language, 
+    talkingbookid
+) tbs_deployed;
+SELECT 25894
+Time: 1013.402 ms
+  -- Add deploymentnumber and languagecode.
+-- Add deploymentnumber, start and end dates
+SELECT * INTO TEMPORARY TABLE deployment_info FROM (
+    SELECT DISTINCT
+      di.project,
+      di.deployment,
+      d.deploymentnumber,
+      di.package,
+      languagecode,
+      d.startdate,
+      d.enddate,
+      recipientid,
+      communityname,
+      groupname,
+      talkingbookid
+    FROM tbs_deployed_info di
+      left outer JOIN deployments d ON d.project = di.project AND d.deployment ilike di.deployment
+    GROUP BY di.project,
+        di.deployment,
+        d.deploymentnumber,
+        di.package,
+        languagecode,
+        d.startdate,
+        d.enddate,
+        di.recipientid,
+        di.communityname,
+        di.groupname,
+        di.talkingbookid
+) depl_i;
+SELECT 25894
+Time: 1344.935 ms
+  -- Report of language, #communities, #tbs, per package
+--SELECT * INTO TEMPORARY TABLE deployments_by_package FROM (
+--    SELECT DISTINCT
+--      di.project,
+--      di.deployment,
+--      di.deploymentnumber,
+--      di.startdate,
+--      di.enddate,
+--      di.package,
+--      di.languagecode,
+--      l.language,
+--      COUNT(DISTINCT community)   AS num_communities,
+--      COUNT(DISTINCT talkingbook) AS deployed_tbs
+--    FROM deployment_info di
+--      JOIN languages l ON l.projectcode = di.project AND l.languagecode ilike di.languagecode
+--
+--    GROUP BY di.project, di.deployment, di.deploymentnumber, di.startdate, di.enddate, di.package, di.languagecode,
+--      l.language
+--    ORDER BY project, di.startdate, deploymentnumber, package, languagecode, language
+--) depl_by_pkg;
+  -- Report of #packages, #languages, #communities, #tbs, per content update
+SELECT * INTO TEMPORARY TABLE deployments_by_deployment FROM (
+    SELECT DISTINCT
+      project,
+      --deployment,
+      STRING_AGG(DISTINCT deployment, ';') AS deployment,
+      deploymentnumber,
+      startdate,
+      enddate,
+      count(DISTINCT package)       AS num_packages,
+      count(DISTINCT languagecode)  AS num_languages,
+      COUNT(DISTINCT communityname) AS num_communities,
+      COUNT(DISTINCT recipientid)   AS num_recipients,
+      COUNT(DISTINCT talkingbookid) AS deployed_tbs
+    FROM deployment_info di
+    GROUP BY project,
+        deploymentnumber,
+        startdate,
+        enddate
+    ORDER BY project, startdate, deploymentnumber
+) depl_by_depl;
+SELECT 63
+Time: 830.340 ms
+  -- Report of #tbs, per community per package
+SELECT * INTO TEMPORARY TABLE deployments_by_community FROM (
+    SELECT DISTINCT
+      di.project,
+      di.deployment,
+      di.deploymentnumber,
+      di.startdate,
+      di.enddate,
+      di.package,
+      di.recipientid,
+      di.communityname,
+      di.communityname as community,
+      COUNT(DISTINCT talkingbookid)      AS deployed_tbs
+    FROM deployment_info di
+    GROUP BY di.project, 
+      di.deployment, 
+      di.deploymentnumber, 
+      di.startdate, 
+      di.enddate, 
+      di.package,
+      di.recipientid,
+      di.communityname
+    ORDER BY project, 
+      communityname, 
+      di.startdate, 
+      deploymentnumber, 
+      package
+) depl_by_comm;
+SELECT 8815
+Time: 997.842 ms
+  -- Report of # packages, per talkingbook
+--SELECT * INTO TEMPORARY TABLE deployments_by_updateoperation FROM (
+--    SELECT DISTINCT project,
+--        community,
+--        talkingbook,
+--        count(DISTINCT package) AS num_packages
+--    FROM update_operation_info
+--    GROUP BY project, community, talkingbook
+--    ORDER BY project, community, talkingbook
+--) depl_by_tb;
+-- Report from tbsdeployed, with details added from other tables.
+--SELECT * INTO TEMPORARY TABLE deployments_by_talkingbook FROM (
+--    SELECT
+--        r.partner,
+--        r.affiliate,
+--        r.communityname,
+--        r.groupname,
+--        r.country,
+--        r.region,
+--        r.district,
+--        tbd.talkingbookid,
+--        tbd.recipientid,
+--        tbd.deployedtimestamp,
+--        tbd.project,
+--        tbd.deployment,
+--        depl.deploymentnumber,
+--        tbd.contentpackage,
+--        tbd.firmware,
+--        tbd.location,
+--        tbd.coordinates,
+--        tbd.username,
+--        tbd.tbcdid,
+--        tbd.action,
+--        tbd.newsn,
+--        tbd.testing
+--
+--    FROM tbsdeployed tbd
+--    JOIN recipients r
+--      ON tbd.recipientid = r.recipientid
+--    JOIN deployments depl
+--      ON tbd.project = depl.project AND tbd.deployment = depl.deployment
+--
+--) depl_by_tbs_deployed;
+-- Report of tbsdeployed, by recipient
+--SELECT * INTO TEMPORARY TABLE deployments_by_recipient FROM (
+--    SELECT DISTINCT
+--      project,
+--      partner,
+--      affiliate,
+--      deploymentnumber,
+--      STRING_AGG(DISTINCT deployment, ';') AS deployment,
+--      country,
+--      region,
+--      district,
+--      communityname,
+--      groupname,
+--      recipientid,
+--      COUNT(DISTINCT talkingbookid) as num_tbs
+--    FROM deployments_by_talkingbook
+--    GROUP BY
+--      project,
+--      deploymentnumber,
+--      partner,
+--      affiliate,
+--      communityname,
+--      groupname,
+--      country,
+--      region,
+--      district,
+--      recipientid
+--    ORDER BY
+--      project,
+--      partner,
+--      affiliate,
+--      deploymentnumber,
+--      country,
+--      region,
+--      district,
+--      communityname,
+--      groupname
+--) depl_by_recip;
+CREATE OR REPLACE TEMP VIEW deployment_date_mismatch AS (
+    SELECT * FROM (
+      SELECT distinct project,
+        deploymentnumber,
+        STRING_AGG(DISTINCT deployment, ';') as deployments,
+        COUNT(DISTINCT startdate) as numstarts,
+        COUNT(DISTINCT enddate) as numends
+      FROM deployments
+      GROUP BY project,
+        deploymentnumber
+      ORDER BY project, deploymentnumber
+    ) d
+    WHERE numstarts!=1 OR numends!=1
+);
+CREATE VIEW
+Time: 2.937 ms
+CREATE OR REPLACE TEMP VIEW deployment_spec AS (
+    SELECT * FROM (
+      SELECT distinct project,
+        deploymentnumber as deployment_num,
+        startdate,
+        enddate,
+        component,
+        concat(project, '-', cast(extract(year from startdate)as integer)%100, '-', deploymentnumber) as name
+      FROM deployments
+      ORDER BY project, deployment_num
+    ) d
+);
+CREATE VIEW
+Time: 2.372 ms
+  -- Report the last 4 deployments per project
+CREATE OR REPLACE TEMP VIEW deployment_dashboard AS (
+    SELECT
+      project,
+      deployment,
+      deploymentnumber,
+      startdate,
+      enddate,
+      num_packages,
+      num_languages,
+      num_communities,
+      deployed_tbs
+    FROM (
+           SELECT
+             ROW_NUMBER()
+             OVER (PARTITION BY project
+               ORDER BY startdate DESC) AS row,
+             dbu.*
+           FROM
+             (select * from deployments_by_deployment where deploymentnumber>0) dbu) extract
+    WHERE
+      extract.row <= 4
+);
+CREATE VIEW
+Time: 3.175 ms
+-- Adds deployment number and recipient's geo-political information
+CREATE OR REPLACE TEMP VIEW tb_deployments AS (
+    SELECT DISTINCT
+        td.project, 
+        d.deploymentnumber,
+        td.deployment,
+        --STRING_AGG(DISTINCT td.deployment, ';') AS deployments,
+        r.partner,
+        r.affiliate,
+        r.country,
+        r.region,
+        r.district,
+        r.communityname,
+        r.groupname,
+        td.recipientid,
+        talkingbookid
+    FROM tbsdeployed td
+    JOIN deployments d
+      ON d.project = td.project AND d.deployment = td.deployment
+    JOIN recipients r
+      ON r.recipientid = td.recipientid
+    GROUP BY
+      td.project,
+      d.deploymentnumber,
+      td.deployment,
+      r.partner,
+      r.affiliate,
+      r.country,
+      r.region,
+      r.district,
+      r.communityname,
+      r.groupname,
+      td.recipientid,
+      talkingbookid
+);
+CREATE VIEW
+Time: 6.041 ms
+CREATE OR REPLACE TEMP VIEW tb_deployments_by_deployment AS (
+    SELECT DISTINCT
+        project,
+        deploymentnumber,
+        STRING_AGG(DISTINCT deployment, ';') AS deployments,
+        COUNT(DISTINCT recipientid) AS num_recipients,
+        COUNT(DISTINCT talkingbookid) AS num_tbs
+    FROM tb_deployments
+    GROUP BY
+        project,
+        deploymentnumber
+    ORDER BY
+        deploymentnumber
+);        
+CREATE VIEW
+Time: 3.476 ms
+CREATE OR REPLACE VIEW tbnewsn AS (
+    SELECT DISTINCT 
+            project
+            ,deployedtimestamp AS timestamp
+            ,extract(year FROM deployedtimestamp) AS year
+            ,extract(month FROM deployedtimestamp) AS month
+            ,to_char(deployedtimestamp, 'Mon') AS month_name
+            ,talkingbookid 
+            ,username ,tbcdid
+        FROM tbsdeployed
+        WHERE newsn 
+        GROUP BY 
+            project
+            ,deployedtimestamp
+            ,talkingbookid
+            ,username ,tbcdid
+        ORDER BY
+            project ,year ,month);        
+CREATE VIEW
+Time: 3.198 ms
+CREATE OR REPLACE VIEW tbnewsn_by_months AS (
+    SELECT DISTINCT
+        project
+        ,year
+        ,month
+        ,month_name
+        ,min(timestamp) AS earliest
+        ,COUNT(DISTINCT timestamp) AS count
+    FROM tbnewsn
+    GROUP BY
+        project, year, month, month_name
+    ORDER BY
+        project, year, month);
+CREATE VIEW
+Time: 3.079 ms
+CREATE OR REPLACE VIEW tbnewsn_past_six_months AS (
+    SELECT * 
+    FROM tbnewsn_by_months
+    WHERE earliest >= Now()::Date-Interval'6 months'
+    ORDER BY project ,year ,month);
+CREATE VIEW
+Time: 3.267 ms
+--
+-- PRODUCTION QUERY
+--
+-- Content deployed, with all the columns we care about
+SELECT * INTO TEMPORARY TABLE production_info FROM (
+    SELECT
+      d.project,
+      d.deployment,
+      d.deploymentnumber,
+      pid.startdate,
+      pid.contentpackage AS package,
+      pid.languagecode,
+      l.language,
+      cip.categoryid,
+      c.categoryname,
+      cip.contentid,
+      cm.format,
+      cm.duration_sec,
+      cm.title
+    -- Get projects and deployments
+    FROM
+      deployments d
+      -- Add contentpackage and the package's language (code and name)
+      JOIN packagesindeployment pid ON pid.project = d.project AND pid.deployment ilike d.deployment
+      JOIN languages l ON l.projectcode = d.project AND l.languagecode ilike pid.languagecode
+      -- Add the content and its category (id and name)
+      JOIN
+      contentinpackage cip
+        ON cip.project = d.project AND cip.contentpackage ilike pid.contentpackage
+      JOIN categories c ON c.projectcode = d.project AND c.categoryid ilike cip.categoryid
+      -- Add the content's title, duration, and format
+      JOIN contentmetadata2 cm ON cm.project = d.project AND cm.contentid ilike cip.contentid
+) prod_info;
+SELECT 2437
+Time: 4956.669 ms
+  -- In the queries below, there is not a strict hierarchy of deployment/package/
+  -- category/message; messages appear in multiple deployments, multiple packages,
+  -- and sometimes in multiple categories in a package.  So, #messages in a package 
+  -- IS NOT the same as the sum of #messages in categories in a package. And
+  -- therefore, we do the aggregation independently for things that can appear, 
+  -- or not, independently within some container grouping (like deployment, or package).
+  -- Production #packages, #messages, duration, per deployment
+SELECT * INTO TEMPORARY TABLE production_by_deployment FROM (
+    SELECT DISTINCT
+      msg.project,
+      --msg.deployment,
+      STRING_AGG(DISTINCT msg.deployment, ';') AS deployment,
+      msg.deploymentnumber,
+      msg.startdate,
+      MAX(pkg.num_packages)                  AS num_packages,
+      MAX(pkg.num_languages)                 AS num_languages,    
+      MAX(cat.num_categories)                AS num_categories,
+      COUNT(DISTINCT msg.contentid)          AS num_messages
+      ---,COUNT(msg.contentid) as all_messages --debugging, should be =num_messages
+      ,
+      ROUND(SUM(msg.duration_sec) / 60.0, 1) AS duration_minutes
+    -- Distinct content and duration
+    FROM (SELECT DISTINCT
+            project,
+            deployment,
+            deploymentnumber,
+            startdate,
+            contentid,
+            duration_sec
+          FROM production_info
+          GROUP BY project, deployment, deploymentnumber, startdate, contentid, duration_sec
+         ) msg
+      -- Distinct packages
+      JOIN (SELECT DISTINCT
+              project,
+              deployment,
+              deploymentnumber,
+              COUNT(DISTINCT languagecode) AS num_languages,            
+              COUNT(DISTINCT package) AS num_packages
+            FROM production_info
+            GROUP BY project, deployment, deploymentnumber
+           ) pkg ON pkg.project = msg.project AND pkg.deploymentnumber = msg.deploymentnumber
+      -- Distinct categories
+      JOIN (SELECT DISTINCT
+              project,
+              deployment,
+              deploymentnumber,
+              COUNT(DISTINCT categoryname) AS num_categories
+            FROM production_info
+            GROUP BY project, deployment, deploymentnumber
+           ) cat ON cat.project = msg.project AND cat.deploymentnumber = msg.deploymentnumber
+    GROUP BY msg.project, 
+        --msg.deployment, 
+        msg.deploymentnumber, 
+        msg.startdate
+    ORDER BY project, startdate 
+) prod_by_depl;
+SELECT 72
+Time: 119.676 ms
+  -- Production #categories, #messages, duration, per deployment per package
+SELECT * INTO TEMPORARY TABLE production_by_package FROM (
+    SELECT DISTINCT
+      msg.project,
+      msg.deployment,
+      msg.deploymentnumber,
+      msg.startdate,
+      msg.package,
+      msg.languagecode,
+      msg.language,
+      MAX(cat.num_categories)                AS num_categories,
+      COUNT(DISTINCT msg.contentid)          AS num_messages,
+      COUNT(msg.contentid)                   AS all_messages --debugging, should be =num_messages
+      ,
+      ROUND(SUM(msg.duration_sec) / 60.0, 1) AS duration_minutes
+    -- Distinct content and duration
+    FROM
+      (SELECT DISTINCT
+         project,
+         deployment,
+         deploymentnumber,
+         startdate,
+         package,
+         languagecode,
+         language,
+         contentid,
+         duration_sec
+       FROM production_info
+       GROUP BY
+         project,
+         deployment,
+         deploymentnumber,
+         startdate,
+         package,
+         languagecode,
+         language,
+         contentid,
+         duration_sec
+      ) msg
+      -- Distinct categories
+      JOIN
+      (SELECT DISTINCT
+         project,
+         deployment,
+         deploymentnumber,
+         package,
+         COUNT(DISTINCT categoryid) AS num_categories
+       FROM production_info
+       GROUP BY project, deployment, deploymentnumber, package
+      ) cat
+        ON cat.project = msg.project AND cat.deployment ilike msg.deployment AND
+           cat.package ilike msg.package
+    GROUP BY
+      msg.project,
+      msg.deployment,
+      msg.deploymentnumber,
+      msg.startdate,
+      msg.package,
+      msg.languagecode,
+      msg.language
+    ORDER BY project, startdate, package
+) prod_by_pkg;
+SELECT 164
+Time: 168.980 ms
+  -- Production #messages, duration per deployment per package(language) per category
+SELECT * INTO TEMPORARY TABLE production_by_category FROM (
+    SELECT DISTINCT
+      project,
+      deployment,
+      deploymentnumber,
+      startdate,
+      package,
+      languagecode,
+      language,
+      categoryid,
+      categoryname,
+      COUNT(DISTINCT contentid)          AS num_messages
+      --,COUNT(contentid) as all_messages --debugging, should be =num_messages
+      ,
+      ROUND(SUM(duration_sec) / 60.0, 1) AS duration_minutes
+    FROM production_info
+    GROUP BY
+      project,
+      deployment,
+      deploymentnumber,
+      startdate,
+      package,
+      languagecode,
+      language,
+      categoryid,
+      categoryname
+    ORDER BY project, deploymentnumber, startdate, package, categoryid
+) prod_by_pkg;
+SELECT 662
+Time: 33.325 ms
+-- Helpers for usage queries.
+-- Like contentinpackage, but with support for categories defined as a title from the ACM.
+-- Such categories have the contentid as the categoryid.
+-- Get the category name from categories or from contentmetadata2, as appropriate.
+CREATE OR REPLACE TEMP VIEW content_cats_in_package AS (
+    SELECT DISTINCT
+        cip.project, 
+        cip.contentpackage, 
+        cip.contentid, 
+        cip.categoryid, 
+        cip.order AS position, 
+        CASE WHEN cat.categoryname:: TEXT~~'General%':: TEXT
+             THEN "substring"(cat.categoryname:: TEXT, 9):: CHARACTER VARYING
+             ELSE CASE when categoryname IS NULL THEN title ELSE categoryname END
+        END AS category,
+        cm2.sdg_goals,
+        cm2.sdg_targets
+    FROM contentinpackage cip 
+    LEFT OUTER JOIN categories cat ON cip.categoryid=cat.categoryid AND cip.project=cat.projectcode
+    LEFT OUTER JOIN contentmetadata2 cm2 ON cip.categoryid=cm2.contentid AND cip.project=cm2.project 
+);
+CREATE VIEW
+Time: 2.919 ms
+-- Adds the languagecode, title, format, and duration_seconds from contentmetadata2, 
+-- order (within playlist) from contentinpackage, and the category (name) from categories.
+-- Commented out lines below swap in 'content_cats_in_package' to replace 'contentinpackage'
+CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
+    SELECT DISTINCT
+      ps.timestamp,
+      ps.project,
+      ps.contentpackage,
+      cm.languagecode,
+      ps.recipientid,
+      -- CASE WHEN cat.categoryname:: TEXT~~'General%':: TEXT
+      --   THEN "substring"(cat.categoryname:: TEXT, 9):: CHARACTER VARYING
+      -- ELSE cat.categoryname
+      -- END             AS category,
+      cp.category,
+      cp.category as playlist,
+      cp.sdg_goals,
+      cp.sdg_targets,
+      ps.contentid,
+      cm.title,
+      cm.format,
+      cm.duration_sec AS duration_seconds,
+      cp.position,
+      --Use like: STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
+      ps.talkingbookid,
+      ps.played_seconds,
+      ps.completed as completions
+    FROM playstatistics ps
+      JOIN contentmetadata2 cm
+        ON ps.contentid = cm.contentid AND ps.project=cm.project
+      JOIN content_cats_in_package cp 
+        ON ps.contentpackage = cp.contentpackage AND ps.contentid=cp.contentid
+      -- JOIN contentinpackage cp
+      --   ON ps.contentpackage = cp.contentpackage AND ps.contentid = cp.contentid
+      -- JOIN categories cat
+      --   ON cat.categoryid = cp.categoryid AND cat.projectcode=cp.project
+) ;
+CREATE VIEW
+Time: 3.259 ms
+-- Adds the language name from language, deploymentnumber and startdate from deployments, 
+-- deployment (name) from packagesindeployment, and partner, affiliate, country, 
+-- region, district, communityname, groupname, and agent from recipients.
+SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
+  SELECT DISTINCT
+      uib.timestamp,
+      uib.project,
+      d.deploymentnumber,
+      d.deployment,
+      d.startdate,
+      uib.contentpackage,
+      uib.languagecode,
+      l.language,
+      uib.recipientid,
+      recip.partner,
+      recip.affiliate,
+      recip.country,
+      recip.region,
+      recip.district,
+      recip.communityname,
+      recip.groupname,
+      recip.agent,
+      uib.talkingbookid,
+      uib.category,
+      uib.playlist,
+      uib.sdg_goals,
+      uib.sdg_targets,
+      uib.contentid,
+      uib.title,
+      uib.format,
+      uib.duration_seconds,
+      uib.position,
+      uib.played_seconds,
+      uib.completions
+    FROM
+      usage_info_base_view uib
+      JOIN packagesindeployment pid
+        ON pid.project=uib.project AND pid.contentpackage = uib.contentpackage
+      JOIN deployments d
+        ON d.project=uib.project AND d.deployment = pid.deployment
+      JOIN languages l ON l.projectcode = uib.project AND l.languagecode = uib.languagecode
+      LEFT OUTER JOIN recipients recip
+        ON uib.recipientid = recip.recipientid
+ ) ui_temp ;
+SELECT 187244
+Time: 19081.011 ms
+-- Update the usage_info table. We've already done the lengthy query (~15 seconds in early 2019), but
+-- the transaction should be quick.
+-- If the schema changes, just run one time with drop table usage_info; select * into usage_info from (select * from usage_info_temp);
+BEGIN;
+BEGIN
+Time: 91.895 ms
+DROP TABLE usage_info;
+DROP TABLE
+Time: 1.267 ms
+SELECT * INTO usage_info FROM (SELECT * FROM usage_info_temp)uit;
+SELECT 187244
+Time: 425.576 ms
+-- DELETE FROM usage_info;
+-- INSERT INTO usage_info SELECT * FROM usage_info_temp;
+COMMIT;
+COMMIT
+Time: 1.503 ms
+-- This is a helper to count the number of talking books that reported using content from some
+-- given content package.
+SELECT * INTO TEMPORARY TABLE package_tbs_used FROM (
+    SELECT DISTINCT
+      project,
+      contentpackage,
+      count(DISTINCT talkingbookid) AS package_tbs_used
+    FROM playstatistics
+    GROUP BY project, contentpackage
+) pkg_tbs_used;
+SELECT 203
+Time: 22403.284 ms
+-- Usage by project / deployment / package / language / category / message
+SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
+    SELECT DISTINCT
+      ps.project,
+      STRING_AGG(DISTINCT ps.deployment, ';') AS deployment,
+      ps.deploymentnumber,
+      ps.contentpackage,
+      languagecode,
+      language,
+      COUNT(DISTINCT category)           AS num_categories,
+      STRING_AGG(DISTINCT category, ';') AS category_list,
+      contentid,
+      title,
+      format,
+      STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
+      round(duration_seconds/60.0, 1)    AS duration_minutes,
+      round(sum(played_seconds)/60.0, 1) AS played_minutes,
+      round(sum(played_seconds)/60.0/greatest(MAX(package_tbs_used), 1), 1)
+                                         AS played_minutes_per_tb,
+      sum(completions)                   AS completions,
+      round(sum(completions)/greatest(MAX(package_tbs_used), 1), 1)
+                                         AS completions_per_tb,
+      count(DISTINCT talkingbookid)      AS num_tbs,
+      MAX(ptb.package_tbs_used)          AS num_package_tbs,
+      ROUND(100.0*count(DISTINCT talkingbookid)/greatest(MAX(package_tbs_used), 1), 0)
+                                         AS percent_tbs_playing
+    FROM
+      usage_info ps
+      JOIN package_tbs_used ptb
+        ON ptb.project=ps.project AND ptb.contentpackage = ps.contentpackage
+    GROUP BY
+      ps.project,
+      ps.deploymentnumber,
+      ps.contentpackage,
+      languagecode,
+      language,
+      contentid,
+      title,
+      format,
+      duration_seconds
+    ORDER BY project, contentpackage, title
+) us_by_msg;
+SELECT 1455
+Time: 8984.522 ms
+-- Usage summarized by deployment and category (aggregated across packages)
+SELECT * INTO TEMPORARY TABLE usage_by_package_category FROM (
+    SELECT DISTINCT
+      cats.project,
+      cats.deploymentnumber,
+      STRING_AGG(DISTINCT cats.deployment, ';') AS deployment,
+      cats.contentpackage,
+      cats.languagecode,
+      cats.language,
+      cats.category,
+      COUNT(DISTINCT cats.contentid)            AS num_messages,
+      ROUND(SUM(duration_seconds)/60.0, 0)      AS duration_minutes,
+      round(MAX(tbinfo.played_seconds)/60.0, 0) AS played_minutes,
+      MAX(tbinfo.completions)                   AS completions,
+      MAX(tbinfo.cat_tbs)                       AS cat_tbs,
+      MAX(ptb.package_tbs_used)                 AS pkg_tbs
+    -- The basics of a usage query
+    FROM
+      (
+        SELECT DISTINCT
+          project,
+          deploymentnumber,
+          deployment,
+          startdate,
+          contentpackage,
+          languagecode,
+          language,
+          category,
+          contentid,
+          duration_seconds
+        FROM usage_info
+        GROUP BY
+          project,
+          deploymentnumber,
+          deployment,
+          startdate,
+          contentpackage,
+          languagecode,
+          language,
+          category,
+          contentid,
+          duration_seconds
+      ) cats
+      -- Data that is per-talkingbook (talkingbook, played duration, completions)
+      JOIN
+      (SELECT DISTINCT
+         project,
+         deploymentnumber,
+         contentpackage,
+         category,
+         count(talkingbookid)          AS all_tbs,
+         count(DISTINCT talkingbookid) AS cat_tbs,
+         sum(played_seconds)           AS played_seconds,
+         sum(completions)              AS completions
+       FROM usage_info
+       GROUP BY project, deploymentnumber, contentpackage, category
+      ) tbinfo
+        ON tbinfo.project=cats.project AND tbinfo.deploymentnumber=cats.deploymentnumber
+           AND tbinfo.contentpackage ilike cats.contentpackage AND tbinfo.category ilike cats.category
+      JOIN
+      package_tbs_used ptb
+        ON ptb.project=cats.project AND ptb.contentpackage ilike cats.contentpackage
+    GROUP BY cats.project,
+      cats.deploymentnumber,
+      cats.contentpackage,
+      cats.languagecode,
+      cats.language,
+      cats.category
+    ORDER BY project
+        ,category
+) us_by_pkg_cat;
+SELECT 387
+Time: 5384.631 ms
+-- Usage at a by project and deployment.
+SELECT * INTO TEMPORARY TABLE usage_by_deployment FROM (
+    SELECT DISTINCT
+      project,
+      STRING_AGG(DISTINCT deployment, ';') AS deployment,
+      deploymentnumber,
+      startdate,
+      COUNT(DISTINCT contentpackage)     AS num_packages,
+      COUNT(DISTINCT languagecode)       AS num_languages,
+      COUNT(DISTINCT communityname)      AS num_communities,
+      COUNT(DISTINCT recipientid)        AS num_recipients,
+      COUNT(DISTINCT category)           AS num_categories,
+      COUNT(DISTINCT contentid)          AS num_messages,
+      COUNT(DISTINCT talkingbookid)      AS num_tbs,
+      ROUND(SUM(played_seconds)/60.0, 2) AS played_minutes,
+      SUM(completions)                   AS num_completions
+    FROM usage_info ui
+    GROUP BY project,
+        deploymentnumber,
+        startdate
+    ORDER BY project, startdate
+) us_by_depl;
+SELECT 49
+Time: 5715.864 ms
+-- Report the last 4 usage counts for every project
+CREATE OR REPLACE TEMP VIEW usage_dashboard AS (
+    SELECT
+      project,
+      deployment,
+      deploymentnumber,
+      startdate,
+      num_packages,
+      num_communities,
+      num_tbs
+    FROM (
+           SELECT
+             ROW_NUMBER()
+             OVER (PARTITION BY project
+               ORDER BY startdate DESC) AS row,
+             ubd.*
+           FROM
+             usage_by_deployment ubd) extract
+    WHERE
+      extract.row<=4
+);
+CREATE VIEW
+Time: 2.805 ms
+ --  PROJECT: UWR
+ \COPY (select * from tbnewsn_past_six_months where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 9.784 ms
+ \COPY (select * from deployments where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/deployments.csv' (FORMAT csv, HEADER true);
+COPY 17
+Time: 0.408 ms
+ \COPY (select * from recipients where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/recipients.csv' (FORMAT csv, HEADER true);
+COPY 51
+Time: 1.251 ms
+ \COPY (select * from recipients_map where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 52
+Time: 0.552 ms
+ \COPY (select * from tbsdeployed where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 9721
+Time: 37.737 ms
+ \COPY (select * from deployments_by_community where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 451
+Time: 52.003 ms
+ \COPY (select * from deployments_by_deployment where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 11
+Time: 38.276 ms
+ \COPY (select * from deployment_date_mismatch where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 1.517 ms
+ \COPY (select * from deployment_spec where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 17
+Time: 1.386 ms
+ \COPY (select * from tb_deployments where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 8736
+Time: 325.632 ms
+ \COPY (select * from tb_deployments_by_deployment where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 10
+Time: 423.823 ms
+ \COPY (select * from production_by_category where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 80
+Time: 36.229 ms
+ \COPY (select * from production_by_deployment where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 17
+Time: 38.927 ms
+ \COPY (select * from production_by_package where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 23
+Time: 40.453 ms
+ \COPY (select * from usage_by_deployment where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.793 ms
+ \COPY (select * from usage_by_package_category where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 21
+Time: 0.986 ms
+ \COPY (select * from usage_by_message where project='UWR')  TO '/Users/bill/tmp/DashboardReports/UWR/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 99
+Time: 1.488 ms
+ --  PROJECT: MEDA
+ \COPY (select * from tbnewsn_past_six_months where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 40.939 ms
+ \COPY (select * from deployments where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/deployments.csv' (FORMAT csv, HEADER true);
+COPY 17
+Time: 0.437 ms
+ \COPY (select * from recipients where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/recipients.csv' (FORMAT csv, HEADER true);
+COPY 1029
+Time: 4.361 ms
+ \COPY (select * from recipients_map where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 1426
+Time: 2.373 ms
+ \COPY (select * from tbsdeployed where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 5931
+Time: 27.369 ms
+ \COPY (select * from deployments_by_community where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 4435
+Time: 13.306 ms
+ \COPY (select * from deployments_by_deployment where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 14
+Time: 0.500 ms
+ \COPY (select * from deployment_date_mismatch where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.652 ms
+ \COPY (select * from deployment_spec where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 15
+Time: 0.518 ms
+ \COPY (select * from tb_deployments where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 5379
+Time: 164.970 ms
+ \COPY (select * from tb_deployments_by_deployment where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 13
+Time: 228.794 ms
+ \COPY (select * from production_by_category where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 282
+Time: 1.150 ms
+ \COPY (select * from production_by_deployment where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 16
+Time: 0.288 ms
+ \COPY (select * from production_by_package where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 52
+Time: 0.422 ms
+ \COPY (select * from usage_by_deployment where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 13
+Time: 0.291 ms
+ \COPY (select * from usage_by_package_category where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 185
+Time: 0.823 ms
+ \COPY (select * from usage_by_message where project='MEDA')  TO '/Users/bill/tmp/DashboardReports/MEDA/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 620
+Time: 3.411 ms
+ --  PROJECT: CARE
+ \COPY (select * from tbnewsn_past_six_months where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 9.825 ms
+ \COPY (select * from deployments where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/deployments.csv' (FORMAT csv, HEADER true);
+COPY 14
+Time: 0.834 ms
+ \COPY (select * from recipients where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/recipients.csv' (FORMAT csv, HEADER true);
+COPY 188
+Time: 2.506 ms
+ \COPY (select * from recipients_map where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 289
+Time: 0.851 ms
+ \COPY (select * from tbsdeployed where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 1205
+Time: 13.494 ms
+ \COPY (select * from deployments_by_community where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 573
+Time: 3.207 ms
+ \COPY (select * from deployments_by_deployment where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 9
+Time: 0.326 ms
+ \COPY (select * from deployment_date_mismatch where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.585 ms
+ \COPY (select * from deployment_spec where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 8
+Time: 0.535 ms
+ \COPY (select * from tb_deployments where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 988
+Time: 49.044 ms
+ \COPY (select * from tb_deployments_by_deployment where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 8
+Time: 56.360 ms
+ \COPY (select * from production_by_category where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 180
+Time: 0.849 ms
+ \COPY (select * from production_by_deployment where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 12
+Time: 0.308 ms
+ \COPY (select * from production_by_package where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 40
+Time: 0.362 ms
+ \COPY (select * from usage_by_deployment where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 8
+Time: 0.280 ms
+ \COPY (select * from usage_by_package_category where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 85
+Time: 0.529 ms
+ \COPY (select * from usage_by_message where project='CARE')  TO '/Users/bill/tmp/DashboardReports/CARE/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 205
+Time: 1.451 ms
+ --  PROJECT: TUDRIDEP
+ \COPY (select * from tbnewsn_past_six_months where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 9.666 ms
+ \COPY (select * from deployments where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/deployments.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.372 ms
+ \COPY (select * from recipients where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/recipients.csv' (FORMAT csv, HEADER true);
+COPY 236
+Time: 1.487 ms
+ \COPY (select * from recipients_map where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 237
+Time: 0.532 ms
+ \COPY (select * from tbsdeployed where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 465
+Time: 12.907 ms
+ \COPY (select * from deployments_by_community where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 393
+Time: 2.859 ms
+ \COPY (select * from deployments_by_deployment where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 4
+Time: 0.301 ms
+ \COPY (select * from deployment_date_mismatch where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.518 ms
+ \COPY (select * from deployment_spec where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.478 ms
+ \COPY (select * from tb_deployments where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 440
+Time: 25.941 ms
+ \COPY (select * from tb_deployments_by_deployment where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 28.226 ms
+ \COPY (select * from production_by_category where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 23
+Time: 0.487 ms
+ \COPY (select * from production_by_deployment where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.291 ms
+ \COPY (select * from production_by_package where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 9
+Time: 0.295 ms
+ \COPY (select * from usage_by_deployment where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.268 ms
+ \COPY (select * from usage_by_package_category where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 12
+Time: 0.342 ms
+ \COPY (select * from usage_by_message where project='TUDRIDEP')  TO '/Users/bill/tmp/DashboardReports/TUDRIDEP/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 32
+Time: 0.674 ms
+ --  PROJECT: CBCC
+ \COPY (select * from tbnewsn_past_six_months where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 10.075 ms
+ \COPY (select * from deployments where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/deployments.csv' (FORMAT csv, HEADER true);
+COPY 8
+Time: 0.522 ms
+ \COPY (select * from recipients where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/recipients.csv' (FORMAT csv, HEADER true);
+COPY 10
+Time: 1.314 ms
+ \COPY (select * from recipients_map where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 11
+Time: 0.332 ms
+ \COPY (select * from tbsdeployed where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 826
+Time: 10.307 ms
+ \COPY (select * from deployments_by_community where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 62
+Time: 3.327 ms
+ \COPY (select * from deployments_by_deployment where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.392 ms
+ \COPY (select * from deployment_date_mismatch where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 4
+Time: 0.895 ms
+ \COPY (select * from deployment_spec where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 7
+Time: 0.897 ms
+ \COPY (select * from tb_deployments where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 412
+Time: 33.027 ms
+ \COPY (select * from tb_deployments_by_deployment where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 33.612 ms
+ \COPY (select * from production_by_category where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 8
+Time: 0.433 ms
+ \COPY (select * from production_by_deployment where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 4
+Time: 0.285 ms
+ \COPY (select * from production_by_package where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 8
+Time: 0.299 ms
+ \COPY (select * from usage_by_deployment where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.305 ms
+ \COPY (select * from usage_by_package_category where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 7
+Time: 0.330 ms
+ \COPY (select * from usage_by_message where project='CBCC')  TO '/Users/bill/tmp/DashboardReports/CBCC/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 76
+Time: 0.840 ms
+ --  PROJECT: UNICEFGHDF-MAHAMA
+ \COPY (select * from tbnewsn_past_six_months where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 10.008 ms
+ \COPY (select * from deployments where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/deployments.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.426 ms
+ \COPY (select * from recipients where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/recipients.csv' (FORMAT csv, HEADER true);
+COPY 37
+Time: 0.993 ms
+ \COPY (select * from recipients_map where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 37
+Time: 0.327 ms
+ \COPY (select * from tbsdeployed where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 159
+Time: 7.220 ms
+ \COPY (select * from deployments_by_community where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 2.117 ms
+ \COPY (select * from deployments_by_deployment where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.493 ms
+ \COPY (select * from deployment_date_mismatch where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.771 ms
+ \COPY (select * from deployment_spec where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.808 ms
+ \COPY (select * from tb_deployments where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 152
+Time: 17.034 ms
+ \COPY (select * from tb_deployments_by_deployment where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 14.889 ms
+ \COPY (select * from production_by_category where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.430 ms
+ \COPY (select * from production_by_deployment where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.272 ms
+ \COPY (select * from production_by_package where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.286 ms
+ \COPY (select * from usage_by_deployment where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.283 ms
+ \COPY (select * from usage_by_package_category where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.334 ms
+ \COPY (select * from usage_by_message where project='UNICEFGHDF-MAHAMA')  TO '/Users/bill/tmp/DashboardReports/UNICEFGHDF-MAHAMA/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 60
+Time: 0.845 ms
+ --  PROJECT: UNICEF-2
+ \COPY (select * from tbnewsn_past_six_months where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 12.033 ms
+ \COPY (select * from deployments where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/deployments.csv' (FORMAT csv, HEADER true);
+COPY 12
+Time: 0.565 ms
+ \COPY (select * from recipients where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/recipients.csv' (FORMAT csv, HEADER true);
+COPY 367
+Time: 3.151 ms
+ \COPY (select * from recipients_map where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 733
+Time: 1.149 ms
+ \COPY (select * from tbsdeployed where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 7621
+Time: 33.877 ms
+ \COPY (select * from deployments_by_community where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 1563
+Time: 6.046 ms
+ \COPY (select * from deployments_by_deployment where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.349 ms
+ \COPY (select * from deployment_date_mismatch where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.643 ms
+ \COPY (select * from deployment_spec where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 12
+Time: 0.579 ms
+ \COPY (select * from tb_deployments where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 7154
+Time: 281.330 ms
+ \COPY (select * from tb_deployments_by_deployment where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 412.371 ms
+ \COPY (select * from production_by_category where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 49
+Time: 0.607 ms
+ \COPY (select * from production_by_deployment where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.268 ms
+ \COPY (select * from production_by_package where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 11
+Time: 0.271 ms
+ \COPY (select * from usage_by_deployment where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.243 ms
+ \COPY (select * from usage_by_package_category where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 47
+Time: 0.465 ms
+ \COPY (select * from usage_by_message where project='UNICEF-2')  TO '/Users/bill/tmp/DashboardReports/UNICEF-2/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 152
+Time: 1.207 ms
+ --  PROJECT: CBCC-AT
+ \COPY (select * from tbnewsn_past_six_months where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 17.304 ms
+ \COPY (select * from deployments where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/deployments.csv' (FORMAT csv, HEADER true);
+COPY 5
+Time: 0.447 ms
+ \COPY (select * from recipients where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/recipients.csv' (FORMAT csv, HEADER true);
+COPY 649
+Time: 5.287 ms
+ \COPY (select * from recipients_map where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 649
+Time: 1.617 ms
+ \COPY (select * from tbsdeployed where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 1509
+Time: 13.435 ms
+ \COPY (select * from deployments_by_community where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 722
+Time: 3.441 ms
+ \COPY (select * from deployments_by_deployment where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.279 ms
+ \COPY (select * from deployment_date_mismatch where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.513 ms
+ \COPY (select * from deployment_spec where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 5
+Time: 0.458 ms
+ \COPY (select * from tb_deployments where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 1312
+Time: 83.896 ms
+ \COPY (select * from tb_deployments_by_deployment where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 101.293 ms
+ \COPY (select * from production_by_category where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 22
+Time: 0.468 ms
+ \COPY (select * from production_by_deployment where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.227 ms
+ \COPY (select * from production_by_package where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 12
+Time: 0.276 ms
+ \COPY (select * from usage_by_deployment where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.229 ms
+ \COPY (select * from usage_by_package_category where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 16
+Time: 0.344 ms
+ \COPY (select * from usage_by_message where project='CBCC-AT')  TO '/Users/bill/tmp/DashboardReports/CBCC-AT/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 118
+Time: 1.182 ms
+ --  PROJECT: CBCC-ANZ
+ \COPY (select * from tbnewsn_past_six_months where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 12.079 ms
+ \COPY (select * from deployments where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/deployments.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.351 ms
+ \COPY (select * from recipients where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/recipients.csv' (FORMAT csv, HEADER true);
+COPY 335
+Time: 2.034 ms
+ \COPY (select * from recipients_map where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 335
+Time: 1.302 ms
+ \COPY (select * from tbsdeployed where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 639
+Time: 15.729 ms
+ \COPY (select * from deployments_by_community where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 550
+Time: 7.203 ms
+ \COPY (select * from deployments_by_deployment where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.418 ms
+ \COPY (select * from deployment_date_mismatch where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.541 ms
+ \COPY (select * from deployment_spec where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.473 ms
+ \COPY (select * from tb_deployments where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 634
+Time: 35.768 ms
+ \COPY (select * from tb_deployments_by_deployment where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 54.749 ms
+ \COPY (select * from production_by_category where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.571 ms
+ \COPY (select * from production_by_deployment where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.344 ms
+ \COPY (select * from production_by_package where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.295 ms
+ \COPY (select * from usage_by_deployment where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 1.100 ms
+ \COPY (select * from usage_by_package_category where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 1.120 ms
+ \COPY (select * from usage_by_message where project='CBCC-ANZ')  TO '/Users/bill/tmp/DashboardReports/CBCC-ANZ/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 72
+Time: 1.556 ms
+ --  PROJECT: UNICEF-CHPS
+ \COPY (select * from tbnewsn_past_six_months where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 17.168 ms
+ \COPY (select * from deployments where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/deployments.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.673 ms
+ \COPY (select * from recipients where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/recipients.csv' (FORMAT csv, HEADER true);
+COPY 15
+Time: 1.284 ms
+ \COPY (select * from recipients_map where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 15
+Time: 0.432 ms
+ \COPY (select * from tbsdeployed where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 65
+Time: 10.742 ms
+ \COPY (select * from deployments_by_community where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 30
+Time: 3.135 ms
+ \COPY (select * from deployments_by_deployment where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 0.481 ms
+ \COPY (select * from deployment_date_mismatch where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.926 ms
+ \COPY (select * from deployment_spec where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 1.115 ms
+ \COPY (select * from tb_deployments where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 51
+Time: 19.243 ms
+ \COPY (select * from tb_deployments_by_deployment where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 16.300 ms
+ \COPY (select * from production_by_category where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 5
+Time: 0.701 ms
+ \COPY (select * from production_by_deployment where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 0.403 ms
+ \COPY (select * from production_by_package where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 0.541 ms
+ \COPY (select * from usage_by_deployment where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 1.328 ms
+ \COPY (select * from usage_by_package_category where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 1.886 ms
+ \COPY (select * from usage_by_message where project='UNICEF-CHPS')  TO '/Users/bill/tmp/DashboardReports/UNICEF-CHPS/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 7
+Time: 2.656 ms
+ --  PROJECT: CBCC-RTI
+ \COPY (select * from tbnewsn_past_six_months where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 14.927 ms
+ \COPY (select * from deployments where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/deployments.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.322 ms
+ \COPY (select * from recipients where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/recipients.csv' (FORMAT csv, HEADER true);
+COPY 111
+Time: 1.522 ms
+ \COPY (select * from recipients_map where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 101
+Time: 0.632 ms
+ \COPY (select * from tbsdeployed where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 171
+Time: 11.709 ms
+ \COPY (select * from deployments_by_community where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 1.751 ms
+ \COPY (select * from deployments_by_deployment where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.242 ms
+ \COPY (select * from deployment_date_mismatch where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.481 ms
+ \COPY (select * from deployment_spec where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.425 ms
+ \COPY (select * from tb_deployments where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 151
+Time: 25.061 ms
+ \COPY (select * from tb_deployments_by_deployment where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 16.860 ms
+ \COPY (select * from production_by_category where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 0.425 ms
+ \COPY (select * from production_by_deployment where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.266 ms
+ \COPY (select * from production_by_package where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.281 ms
+ \COPY (select * from usage_by_deployment where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.264 ms
+ \COPY (select * from usage_by_package_category where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 0.318 ms
+ \COPY (select * from usage_by_message where project='CBCC-RTI')  TO '/Users/bill/tmp/DashboardReports/CBCC-RTI/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 4
+Time: 0.547 ms
+ --  PROJECT: CBCC-ATAY
+ \COPY (select * from tbnewsn_past_six_months where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 12.411 ms
+ \COPY (select * from deployments where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/deployments.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 1.481 ms
+ \COPY (select * from recipients where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/recipients.csv' (FORMAT csv, HEADER true);
+COPY 61
+Time: 1.585 ms
+ \COPY (select * from recipients_map where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 64
+Time: 0.653 ms
+ \COPY (select * from tbsdeployed where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 73
+Time: 8.262 ms
+ \COPY (select * from deployments_by_community where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 24
+Time: 4.824 ms
+ \COPY (select * from deployments_by_deployment where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.661 ms
+ \COPY (select * from deployment_date_mismatch where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.683 ms
+ \COPY (select * from deployment_spec where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.487 ms
+ \COPY (select * from tb_deployments where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 55
+Time: 15.539 ms
+ \COPY (select * from tb_deployments_by_deployment where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 14.830 ms
+ \COPY (select * from production_by_category where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 0.459 ms
+ \COPY (select * from production_by_deployment where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.237 ms
+ \COPY (select * from production_by_package where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 2
+Time: 0.293 ms
+ \COPY (select * from usage_by_deployment where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.220 ms
+ \COPY (select * from usage_by_package_category where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 1
+Time: 0.275 ms
+ \COPY (select * from usage_by_message where project='CBCC-ATAY')  TO '/Users/bill/tmp/DashboardReports/CBCC-ATAY/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 10
+Time: 0.806 ms
+ --  PROJECT: ANSI-SV1
+ \COPY (select * from tbnewsn_past_six_months where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 15.738 ms
+ \COPY (select * from deployments where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/deployments.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 1.427 ms
+ \COPY (select * from recipients where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/recipients.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 1.316 ms
+ \COPY (select * from recipients_map where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/recipients_map.csv' (FORMAT csv, HEADER true);
+COPY 6
+Time: 0.404 ms
+ \COPY (select * from tbsdeployed where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/tbsdeployed.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 10.384 ms
+ \COPY (select * from deployments_by_community where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/deployments_by_community.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 1.761 ms
+ \COPY (select * from deployments_by_deployment where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.406 ms
+ \COPY (select * from deployment_date_mismatch where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/deployment_date_mismatch.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.652 ms
+ \COPY (select * from deployment_spec where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/deployment_spec.csv' (FORMAT csv, HEADER true);
+COPY 3
+Time: 0.518 ms
+ \COPY (select * from tb_deployments where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/tb_deployments.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 14.179 ms
+ \COPY (select * from tb_deployments_by_deployment where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/tb_deployments_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 13.747 ms
+ \COPY (select * from production_by_category where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/production_by_category.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.498 ms
+ \COPY (select * from production_by_deployment where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/production_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.298 ms
+ \COPY (select * from production_by_package where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/production_by_package.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.316 ms
+ \COPY (select * from usage_by_deployment where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/usage_by_deployment.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.307 ms
+ \COPY (select * from usage_by_package_category where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/usage_by_package_category.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.371 ms
+ \COPY (select * from usage_by_message where project='ANSI-SV1')  TO '/Users/bill/tmp/DashboardReports/ANSI-SV1/usage_by_message.csv' (FORMAT csv, HEADER true);
+COPY 0
+Time: 0.610 ms
+ --  GLOBAL
+ \COPY (select * from deployment_dashboard)  TO '/Users/bill/tmp/DashboardReports/deployment_dashboard.csv' (FORMAT csv, HEADER true);
+COPY 33
+Time: 0.962 ms
+ \COPY (select * from usage_dashboard)  TO '/Users/bill/tmp/DashboardReports/usage_dashboard.csv' (FORMAT csv, HEADER true);
+COPY 32
+Time: 0.747 ms
+ \COPY (select * from tbnewsn_past_six_months)  TO '/Users/bill/tmp/DashboardReports/tbnewsn_past_six_months.csv' (FORMAT csv, HEADER true);
+COPY 12
+Time: 28.131 ms

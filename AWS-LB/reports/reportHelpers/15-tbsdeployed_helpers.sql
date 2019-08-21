@@ -5,7 +5,7 @@ CREATE OR REPLACE TEMP VIEW tb_deployments AS (
         td.project, 
         d.deploymentnumber,
         td.deployment,
-        --STRING_AGG(DISTINCT td.deployment, ';') as deployments,
+        --STRING_AGG(DISTINCT td.deployment, ';') AS deployments,
         r.partner,
         r.affiliate,
         r.country,
@@ -40,9 +40,9 @@ CREATE OR REPLACE TEMP VIEW tb_deployments_by_deployment AS (
     SELECT DISTINCT
         project,
         deploymentnumber,
-        STRING_AGG(DISTINCT deployment, ';') as deployments,
-        COUNT(DISTINCT recipientid) as num_recipients,
-        COUNT(DISTINCT talkingbookid) as num_tbs
+        STRING_AGG(DISTINCT deployment, ';') AS deployments,
+        COUNT(DISTINCT recipientid) AS num_recipients,
+        COUNT(DISTINCT talkingbookid) AS num_tbs
     FROM tb_deployments
     GROUP BY
         project,
@@ -51,3 +51,42 @@ CREATE OR REPLACE TEMP VIEW tb_deployments_by_deployment AS (
         deploymentnumber
 );        
 
+
+CREATE OR REPLACE VIEW tbnewsn AS (
+    SELECT DISTINCT 
+            project
+            ,deployedtimestamp AS timestamp
+            ,extract(year FROM deployedtimestamp) AS year
+            ,extract(month FROM deployedtimestamp) AS month
+            ,to_char(deployedtimestamp, 'Mon') AS month_name
+            ,talkingbookid 
+            ,username ,tbcdid
+        FROM tbsdeployed
+        WHERE newsn 
+        GROUP BY 
+            project
+            ,deployedtimestamp
+            ,talkingbookid
+            ,username ,tbcdid
+        ORDER BY
+            project ,year ,month);        
+
+CREATE OR REPLACE VIEW tbnewsn_by_months AS (
+    SELECT DISTINCT
+        project
+        ,year
+        ,month
+        ,month_name
+        ,min(timestamp) AS earliest
+        ,COUNT(DISTINCT timestamp) AS count
+    FROM tbnewsn
+    GROUP BY
+        project, year, month, month_name
+    ORDER BY
+        project, year, month);
+
+CREATE OR REPLACE VIEW tbnewsn_past_six_months AS (
+    SELECT * 
+    FROM tbnewsn_by_months
+    WHERE earliest >= Now()::Date-Interval'6 months'
+    ORDER BY project ,year ,month);

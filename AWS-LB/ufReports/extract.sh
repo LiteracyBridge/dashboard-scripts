@@ -10,7 +10,8 @@ if [ -z ${acm-} ]; then
 fi
 
 report="$(pwd)/report.txt"
-projectsList=projects.txt
+processList=process.list    # the list of projects to process
+projectsTxt=projects.txt    # Dashboard reads this to offer UF to view.
 partitionsList=partitions.txt
 
 acmExporter="java -cp ${acm}acm.jar:${acm}lib/* org.literacybridge.acm.tools.CSVDatabaseExporter"
@@ -25,8 +26,8 @@ numericre='^[0-9]+$'
 function main() {
     printf "\n\nUser Feedback reports created at $(date).\n\n">${report}
 
-    cp "${projectsList}" uf/
-    for acm in $(cat "${projectsList}"); do
+    cp "${projectsTxt}" uf/
+    for acm in $(cat "${processList}"); do
         mkdir -p "uf/${acm}"
         (cd "uf/${acm}"; getUserFeedbackStats "${acm}")
     done

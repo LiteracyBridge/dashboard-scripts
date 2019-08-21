@@ -110,6 +110,7 @@ function extractMetadata() {
         \COPY (SELECT * FROM recipients WHERE project='${project}')     TO '${programspecdir}/recipients.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM recipients_map WHERE project='${project}') TO '${programspecdir}/recipients_map.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM deployments WHERE project='${project}')    TO '${programspecdir}/deployments.csv' WITH CSV HEADER;
+        \COPY (SELECT * FROM deployment_spec WHERE project='${project}' ORDER BY deployment_num) TO '${programspecdir}/deployment_spec.csv' WITH CSV HEADER;
 
         \COPY (SELECT * FROM recipients WHERE project='${project}')     TO '${metadatadir}/recipients.csv' WITH CSV HEADER;
         \COPY (SELECT * FROM recipients_map WHERE project='${project}') TO '${metadatadir}/recipients_map.csv' WITH CSV HEADER;

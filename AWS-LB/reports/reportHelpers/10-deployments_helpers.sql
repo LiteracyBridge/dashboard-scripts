@@ -253,6 +253,7 @@ CREATE OR REPLACE TEMP VIEW deployment_spec AS (
         component,
         concat(project, '-', cast(extract(year from startdate)as integer)%100, '-', deploymentnumber) as name
       FROM deployments
+      ORDER BY project, deployment_num
     ) d
 );
 

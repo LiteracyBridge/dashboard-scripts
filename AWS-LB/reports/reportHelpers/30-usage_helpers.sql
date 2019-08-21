@@ -1,7 +1,30 @@
 -- Helpers for usage queries.
 
+-- Like contentinpackage, but with support for categories defined as a title from the ACM.
+-- Such categories have the contentid as the categoryid.
+-- Get the category name from categories or from contentmetadata2, as appropriate.
+CREATE OR REPLACE TEMP VIEW content_cats_in_package AS (
+    SELECT DISTINCT
+        cip.project, 
+        cip.contentpackage, 
+        cip.contentid, 
+        cip.categoryid, 
+        cip.order AS position, 
+        CASE WHEN cat.categoryname:: TEXT~~'General%':: TEXT
+             THEN "substring"(cat.categoryname:: TEXT, 9):: CHARACTER VARYING
+             ELSE CASE when categoryname IS NULL THEN title ELSE categoryname END
+        END AS category,
+        cm2.sdg_goals,
+        cm2.sdg_targets
+    FROM contentinpackage cip 
+    LEFT OUTER JOIN categories cat ON cip.categoryid=cat.categoryid AND cip.project=cat.projectcode
+    LEFT OUTER JOIN contentmetadata2 cm2 ON cip.categoryid=cm2.contentid AND cip.project=cm2.project 
+);
+
+
 -- Adds the languagecode, title, format, and duration_seconds from contentmetadata2, 
 -- order (within playlist) from contentinpackage, and the category (name) from categories.
+-- Commented out lines below swap in 'content_cats_in_package' to replace 'contentinpackage'
 CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
     SELECT DISTINCT
       ps.timestamp,
@@ -9,15 +32,19 @@ CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
       ps.contentpackage,
       cm.languagecode,
       ps.recipientid,
-      CASE WHEN cat.categoryname:: TEXT~~'General%':: TEXT
-        THEN "substring"(cat.categoryname:: TEXT, 9):: CHARACTER VARYING
-      ELSE cat.categoryname
-      END             AS category,
+      -- CASE WHEN cat.categoryname:: TEXT~~'General%':: TEXT
+      --   THEN "substring"(cat.categoryname:: TEXT, 9):: CHARACTER VARYING
+      -- ELSE cat.categoryname
+      -- END             AS category,
+      cp.category,
+      cp.category as playlist,
+      cp.sdg_goals,
+      cp.sdg_targets,
       ps.contentid,
       cm.title,
       cm.format,
       cm.duration_sec AS duration_seconds,
-      cp.order as position,
+      cp.position,
       --Use like: STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
       ps.talkingbookid,
       ps.played_seconds,
@@ -25,10 +52,12 @@ CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
     FROM playstatistics ps
       JOIN contentmetadata2 cm
         ON ps.contentid = cm.contentid AND ps.project=cm.project
-      JOIN contentinpackage cp
-        ON ps.contentpackage = cp.contentpackage AND ps.contentid = cp.contentid
-      JOIN categories cat
-        ON cat.categoryid = cp.categoryid AND cat.projectcode=cp.project
+      JOIN content_cats_in_package cp 
+        ON ps.contentpackage = cp.contentpackage AND ps.contentid=cp.contentid
+      -- JOIN contentinpackage cp
+      --   ON ps.contentpackage = cp.contentpackage AND ps.contentid = cp.contentid
+      -- JOIN categories cat
+      --   ON cat.categoryid = cp.categoryid AND cat.projectcode=cp.project
 ) ;
 
 -- Adds the language name from language, deploymentnumber and startdate from deployments, 
@@ -57,6 +86,9 @@ SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
       uib.talkingbookid,
 
       uib.category,
+      uib.playlist,
+      uib.sdg_goals,
+      uib.sdg_targets,
       uib.contentid,
       uib.title,
       uib.format,
@@ -82,6 +114,9 @@ SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
 -- the transaction should be quick.
 -- If the schema changes, just run one time with drop table usage_info; select * into usage_info from (select * from usage_info_temp);
 BEGIN;
+
+-- DROP TABLE usage_info;
+-- SELECT * INTO usage_info FROM (SELECT * FROM usage_info_temp)uit;
 
 DELETE FROM usage_info;
 INSERT INTO usage_info SELECT * FROM usage_info_temp;

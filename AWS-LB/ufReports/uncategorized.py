@@ -23,14 +23,13 @@ usage = '''
     "A-000603AA_0097_0001_5F06F168","A-000603AA","A-000603AA_5F06F168","SIGRE-JIRAPA","dga",
             "","0","26","","","2193/04/13","","2016-2:0097","HH Rotation 4:Day -^U-0",
             "","","","","","9-2","l","UWR-FB-2016-2",""
-     columns of interest are TITLE, PUBLISHER, SOURCE, LANGUAGE, RELATION, CATEGORIES, and CORRELATION_ID, here like
+     columns of interest are TITLE, PUBLISHER, SOURCE, LANGUAGE, RELATION, and CATEGORIES, here like
        title=A-0008029C_0128_0001_2A9F5437
        publisher=A-0008029C
        source=SIGRE-JIRAPA
        language=dga
        relation=LB-2_n87lyyogf2_oa
        categories=9-2
-       correlation_id=WLBR
 
   categories.csv is like:
     "ID","NAME","FULLNAME"
@@ -65,16 +64,14 @@ categories = []
 #                "DC_PUBLISHER",     # Talking Book "serial number"
 #                "DC_SOURCE",        # Village / community
 #                "DC_LANGUAGE",      # Language
-#                "DC_RELATION",      # Content id to which the feedback applies
-#                "LB_CORRELATION_ID" # Correlation id, a short, unique string of letters
+#                "DC_RELATION"       # Content id to which the feedback applies
 #                ]
 # Friendlier names for the columns we care about
 column_label = {"DC_TITLE":"feedback_id",               # unique id of the feedback
                 "DC_PUBLISHER":"tb_id",                 # Talking Book "serial number"
                 "DC_SOURCE":"community",                # Village / community
                 "DC_LANGUAGE":"language",               # Language
-                "DC_RELATION":"content_id",             # Content id to which the feedback applies
-                "LB_CORRELATION_ID":"correlation_id"    # Correlation id, a short, unique string of letters
+                "DC_RELATION":"content_id"              # Content id to which the feedback applies
                 }
 columns = column_label.keys()
 # Column index of the columns we care about
