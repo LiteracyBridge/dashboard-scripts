@@ -369,6 +369,7 @@ function usage() {
     echo "    -d dd      import Day, default all days, requires month"
     echo ""
     echo "    -u         reimport User feedback"
+    echo "    -p pr        when importing UF, limit to project pr."
     echo "    -s         reimport Statistics. If both user feedback and statistics, user feedback is first."
     echo "    -z           when importing Statistics, do not perform database writes."
     echo "    -i         reimport Deployment Installations. Runs after UF or Stats."
