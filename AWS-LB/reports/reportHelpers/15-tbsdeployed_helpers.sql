@@ -51,12 +51,15 @@ CREATE OR REPLACE TEMP VIEW tb_deployments_by_deployment AS (
         deploymentnumber
 );        
 
+BEGIN TRANSACTION;
+DROP VIEW tbnewsn CASCADE;
 
 CREATE OR REPLACE VIEW tbnewsn AS (
     SELECT DISTINCT 
             project
             ,deployedtimestamp AS timestamp
             ,extract(year FROM deployedtimestamp) AS year
+            ,extract(quarter FROM deployedtimestamp) AS quarter
             ,extract(month FROM deployedtimestamp) AS month
             ,to_char(deployedtimestamp, 'Mon') AS month_name
             ,talkingbookid 
@@ -75,13 +78,14 @@ CREATE OR REPLACE VIEW tbnewsn_by_months AS (
     SELECT DISTINCT
         project
         ,year
+        ,quarter
         ,month
         ,month_name
         ,min(timestamp) AS earliest
         ,COUNT(DISTINCT timestamp) AS count
     FROM tbnewsn
     GROUP BY
-        project, year, month, month_name
+        project, year, quarter, month, month_name
     ORDER BY
         project, year, month);
 
@@ -90,3 +94,5 @@ CREATE OR REPLACE VIEW tbnewsn_past_six_months AS (
     FROM tbnewsn_by_months
     WHERE earliest >= Now()::Date-Interval'6 months'
     ORDER BY project ,year ,month);
+
+COMMIT TRANSACTION;
