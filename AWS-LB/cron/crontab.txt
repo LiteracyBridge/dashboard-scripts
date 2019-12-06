@@ -4,7 +4,10 @@
 # Run cronContent.sh every 5 minutes
 */5 * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1
 
+# Sync program specs every 3 minutes
+*/3 * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/work/syncwrapper.log
+
 # Run cronjob every minute, for testing
-#* * * * * /home/ubuntu/cron/DeploymentsToS3Sync/cronjob.sh
+#* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/test.log
 #* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/template.sh cron/cronvars.sh
 #* * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1

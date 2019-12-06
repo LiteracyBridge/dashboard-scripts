@@ -48,7 +48,12 @@ CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
       --Use like: STRING_AGG(DISTINCT CAST(position AS TEXT), ';') AS position_list,
       ps.talkingbookid,
       ps.played_seconds,
-      ps.completed as completions
+      ps.completed as completions,
+      ps.threequarters,
+      ps.half,
+      ps.quarter,
+      ps.started,
+      ps.tbcdid
     FROM playstatistics ps
       JOIN contentmetadata2 cm
         ON ps.contentid = cm.contentid AND ps.project=cm.project
@@ -96,7 +101,12 @@ SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
       uib.position,
 
       uib.played_seconds,
-      uib.completions
+      uib.completions,
+      uib.threequarters,
+      uib.half,
+      uib.quarter,
+      uib.started,
+      uib.tbcdid
 
     FROM
       usage_info_base_view uib
