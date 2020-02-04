@@ -38,6 +38,8 @@ def main():
                             help='Optional user name, default from secrets store.')
     arg_parser.add_argument('--db-password', default=None, metavar='PWD',
                             help='Optional password, default from secrets store.')
+    arg_parser.add_argument('--db-name', default='dashboard', metavar='DB',
+                            help='Optional database name, default "dashboard".')
 
     arg_parser.add_argument('command', choices=['deployments', 'progspecs', 'all'],
                             help='Command to run')

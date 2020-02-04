@@ -30,6 +30,9 @@ RECIPIENTS_MAP_FILE = RECIPIENTS_MAP + '.csv'
 TALKINGBOOK_MAP = 'talkingbook_map'
 TALKINGBOOK_MAP_FILE = TALKINGBOOK_MAP + '.csv'
 
+DEPLOYMENT_SPEC = 'deployment_spec'
+DEPLOYMENT_SPEC_FILE = DEPLOYMENT_SPEC + '.csv'
+
 VERSIONS_FILE = 'etags.properties'
 PROGSPEC_FILES_TO_KEEP = [VERSIONS_FILE, 'deployments.csv']
 PROGSPEC_EXTENSIONS_TO_KEEP = ['.xlsx']
@@ -181,11 +184,13 @@ def get_db_connection():
         if args.db_host:
             parms['host'] = args.db_host
         if args.db_port:
-            parms['port'] = args.db_port
+            parms['port'] = int(args.db_port)
         if args.db_user:
             parms['user'] = args.db_user
         if args.db_password:
             parms['password'] = args.db_password
+        if args.db_name:
+            parms['database'] = args.db_name
 
         db_connection = pg8000.connect(**parms)
 
@@ -194,65 +199,6 @@ def get_db_connection():
         RECIPIENTS_COLUMNS = [x for x in [x[0].decode('ascii') for x in cur.description] if x != RECIPIENTS_TABLE_PKEY]
 
     return db_connection
-
-
-# Update sql database from recipients file.
-# noinspection SqlResolve,SqlNoDataSourceInspection
-def update_recipients(project: str, progspecdir: Path = None):
-    global args, dropbox, found_errors
-    if progspecdir is None:
-        progspecdir = Path(dropbox, cannonical_acm_name(project), PROGSPEC_DIR)
-    recipients_csv = Path(progspecdir, RECIPIENTS_FILE)
-    recipients_map_csv = Path(progspecdir, RECIPIENTS_MAP_FILE)
-    talkingbook_map_csv = Path(progspecdir, TALKINGBOOK_MAP_FILE)
-
-    report('   Syncing database recipients for {}'.format(project))
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # load temporary table with recipients
-    cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM recipients WHERE FALSE;')
-    with open(recipients_csv, 'rb') as f:
-        cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
-    num_loaded = cur.rowcount
-    # update into production table
-    update = 'INSERT INTO {0} SELECT * FROM temp_table ON CONFLICT ({1}) DO UPDATE SET '.format(RECIPIENTS_TABLE,
-                                                                                                RECIPIENTS_TABLE_PKEY)
-    update += ','.join([x + '=EXCLUDED.' + x for x in RECIPIENTS_COLUMNS])
-    update += ';'
-    cur.execute(update)
-    num_updated = cur.rowcount
-    found_errors |= num_updated != num_loaded
-    report('   Recipients updated {} of {} loaded'.format(num_updated, num_loaded))
-    cur.execute('DROP TABLE temp_table;')
-
-    # load temporary table with recipients_map
-    cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM recipients_map WHERE FALSE;')
-    with open(recipients_map_csv, 'rb') as f:
-        cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
-    num_loaded = cur.rowcount
-    # update into production table
-    update = 'INSERT INTO recipients_map SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
-    cur.execute(update)
-    num_updated = cur.rowcount
-    report('   Recipients_map updated {} of {} loaded'.format(num_updated, num_loaded))
-    cur.execute('DROP TABLE temp_table;')
-
-    if talkingbook_map_csv.exists():
-        # load temporary table with recipients_map
-        cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM ' + TALKINGBOOK_MAP + ' WHERE FALSE;')
-        with open(talkingbook_map_csv, 'rb') as f:
-            cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
-        num_loaded = cur.rowcount
-        # update into production table
-        update = 'INSERT INTO ' + TALKINGBOOK_MAP + ' SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
-        cur.execute(update)
-        num_updated = cur.rowcount
-        report('   Talkingbook_map updated {} of {} loaded'.format(num_updated, num_loaded))
-        cur.execute('DROP TABLE temp_table;')
-
-    conn.commit()
 
 
 # Get a list of projects with Program Specifications in S3
@@ -306,9 +252,88 @@ class ProjectSynchronizer():
         self._files_updated = set()
         self._files_removed = set()
         self._recipients_changed = False
+        self._deployments_changed = False
         self._success = False
-    
-    
+
+    # Update sql database from recipients file.
+    # noinspection SqlResolve,SqlNoDataSourceInspection
+    def update_tables(self):
+        global args, dropbox, found_errors
+        recipients_csv = Path(self._progspecdir, RECIPIENTS_FILE)
+        recipients_map_csv = Path(self._progspecdir, RECIPIENTS_MAP_FILE)
+        talkingbook_map_csv = Path(self._progspecdir, TALKINGBOOK_MAP_FILE)
+        deployment_spec_csv = Path(self._progspecdir, DEPLOYMENT_SPEC_FILE)
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        if self._recipients_changed:
+            report('   Syncing database recipients for {}'.format(self._project))
+
+            # load temporary table with recipients
+            cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM recipients WHERE FALSE;')
+            with open(recipients_csv, 'rb') as f:
+                cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
+            num_loaded = cur.rowcount
+            # update into production table
+            update = 'INSERT INTO {0} SELECT * FROM temp_table ON CONFLICT ({1}) DO UPDATE SET '.format(RECIPIENTS_TABLE,
+                                                                                                        RECIPIENTS_TABLE_PKEY)
+            update += ','.join([x + '=EXCLUDED.' + x for x in RECIPIENTS_COLUMNS])
+            update += ';'
+            cur.execute(update)
+            num_updated = cur.rowcount
+            found_errors |= num_updated != num_loaded
+            report('   Recipients updated {} of {} loaded'.format(num_updated, num_loaded))
+            cur.execute('DROP TABLE temp_table;')
+
+            # load temporary table with recipients_map
+            cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM recipients_map WHERE FALSE;')
+            with open(recipients_map_csv, 'rb') as f:
+                cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
+            num_loaded = cur.rowcount
+            # update into production table
+            update = 'INSERT INTO recipients_map SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
+            cur.execute(update)
+            num_updated = cur.rowcount
+            report('   Recipients_map updated {} of {} loaded'.format(num_updated, num_loaded))
+            cur.execute('DROP TABLE temp_table;')
+
+            if talkingbook_map_csv.exists():
+                # load temporary table with recipients_map
+                cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM ' + TALKINGBOOK_MAP + ' WHERE FALSE;')
+                with open(talkingbook_map_csv, 'rb') as f:
+                    cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
+                num_loaded = cur.rowcount
+                # update into production table
+                update = 'INSERT INTO ' + TALKINGBOOK_MAP + ' SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
+                cur.execute(update)
+                num_updated = cur.rowcount
+                report('   Talkingbook_map updated {} of {} loaded'.format(num_updated, num_loaded))
+                cur.execute('DROP TABLE temp_table;')
+
+        if self._deployments_changed:
+            # deployment_spec -> deployments
+            cur.execute(
+                'CREATE TEMPORARY TABLE temp_table (project TEXT, deployment_num INTEGER, startdate DATE, enddate DATE, component TEXT, name TEXT);')
+            with open(deployment_spec_csv, 'rb') as f:
+                cur.execute("COPY temp_table FROM stdin WITH DELIMITER ',' CSV HEADER FORCE NOT NULL component;", stream=f)
+            num_loaded = cur.rowcount
+            # update into production table
+            update = 'INSERT INTO deployments ' + \
+                     'SELECT project, name AS deployment, name AS deploymentname, deployment_num, ' + \
+                     '  startdate, enddate, NULL, NULL, component ' + \
+                     'FROM temp_table ' + \
+                     'ON CONFLICT (project, deployment) ' + \
+                     '  DO UPDATE SET startdate=EXCLUDED.startdate, enddate=EXCLUDED.enddate, ' + \
+                     '    deploymentnumber=EXCLUDED.deploymentnumber, ' + \
+                     '    deployment=EXCLUDED.deployment, component=EXCLUDED.component;'
+            cur.execute(update)
+            num_updated = cur.rowcount
+            report('   Deployments updated {} of {} loaded'.format(num_updated, num_loaded))
+            cur.execute('DROP TABLE temp_table;')
+
+        conn.commit()
+
     # Get the list of files, and their etags, from the server
     def get_server_etags(self):
         result = {}
@@ -369,6 +394,7 @@ class ProjectSynchronizer():
             xtra = {'VersionId': obj_head['VersionId']}
             s3_client.download_file(Bucket=BUCKET_NAME, Key=key, Filename=download_path, ExtraArgs=xtra)
             self._recipients_changed |= fn == RECIPIENTS_FILE
+            self._deployments_changed |= fn == DEPLOYMENT_SPEC_FILE
             self._files_updated.add(fn)
             # so we don't download it again unnecessarily, if something else triggers a retry
             self._needed_etags.pop(fn, None)
@@ -382,8 +408,8 @@ class ProjectSynchronizer():
                     self._files_removed.add(entry.name)
                     Path(entry).unlink()
 
-        if self._recipients_changed:
-            update_recipients(self._project, self._progspecdir)
+        if self._recipients_changed or self._deployments_changed:
+            self.update_tables()
 
         self.write_local_etags()
         
@@ -535,6 +561,8 @@ def main():
                             help='Optional user name, default from secrets store.')
     arg_parser.add_argument('--db-password', default=None, metavar='PWD',
                             help='Optional password, default from secrets store.')
+    arg_parser.add_argument('--db-name', default='dashboard', metavar='DB',
+                            help='Optional database name, default "dashboard".')
     args = arg_parser.parse_args()
 
     return run(args)
