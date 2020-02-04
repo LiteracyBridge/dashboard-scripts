@@ -6,7 +6,6 @@ tbsdeployed
 deployments_by_community
 deployments_by_deployment
 deployment_date_mismatch
-deployment_spec
 tb_deployments
 tb_deployments_by_deployment
 production_by_category
