@@ -11,3 +11,5 @@
 #* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/test.log
 #* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/template.sh cron/cronvars.sh
 #* * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1
+
+@reboot /home/ubuntu/bin/dropbox.py start
