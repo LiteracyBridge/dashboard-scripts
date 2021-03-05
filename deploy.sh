@@ -46,6 +46,6 @@ fi
 
 # Copy new files. Rsync -va will list only the files copied, and copy only changed files.
 echo "./AWS-LB/* -> ${awsDir}/"
-echo rsync -av --exclude utilities/*.csv --exclude utilities/*.xlsx --exclude '.*' --exclude data ./AWS-LB/* ${awsDir}/
-rsync -av --exclude utilities/*.csv --exclude utilities/*.xlsx --exclude '.*' --exclude data ./AWS-LB/* ${awsDir}/
+echo rsync ${DEPLOY_RSYNC} -av --exclude utilities/*.csv --exclude utilities/*.xlsx --exclude '.*' --exclude data --exclude 'bin/cloudsync/__pycache__/*' --exclude 'bin/cloudsync/cloudsyncenv/*' ./AWS-LB/* ${awsDir}/
+rsync ${DEPLOY_RSYNC} -av --exclude utilities/*.csv --exclude utilities/*.xlsx --exclude '.*' --exclude data --exclude 'bin/cloudsync/__pycache__/*' --exclude 'bin/cloudsync/cloudsyncenv/*' ./AWS-LB/* ${awsDir}/
 

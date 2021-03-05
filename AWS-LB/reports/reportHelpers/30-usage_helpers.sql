@@ -144,6 +144,53 @@ SELECT * INTO TEMPORARY TABLE package_tbs_used FROM (
     GROUP BY project, contentpackage
 ) pkg_tbs_used;
 
+-- Query for the standard Tableau dashboard
+CREATE OR REPLACE TEMP VIEW twbx_info AS (
+  SELECT DISTINCT r.project
+        ,talkingbookid as "TB"
+        ,deploymentnumber as "Deployment #"
+        ,ui.region as "Region"
+        ,ui.district as "District"
+        ,ui.communityname as "Community"
+        ,ui.agent as "Agent"
+        ,title as "Message"
+        ,ui.language as "Language"
+        ,format as "Format"
+        ,playlist as "Playlist"
+        ,position as "Position"
+        ,duration_seconds as "Duration"
+        ,SUM(completions) AS "Total Completions"
+        ,SUM(played_seconds) AS "Total Time Played"
+    FROM usage_info ui
+    JOIN recipients r on (ui.recipientid=r.recipientid)
+    WHERE played_seconds>0
+    GROUP BY r.project
+        ,talkingbookid
+        ,deploymentnumber
+        ,ui.region
+        ,ui.district
+        ,ui.communityname
+        ,ui.agent
+        ,title
+        ,ui.language
+        ,format
+        ,playlist
+        ,position
+        ,duration_seconds 
+    ORDER BY r.project
+        ,talkingbookid
+        ,deploymentnumber
+        ,ui.region
+        ,ui.district
+        ,ui.communityname
+        ,ui.agent
+        ,title
+        ,ui.language
+        ,format
+        ,playlist
+        ,position
+        ,duration_seconds
+);
 
 -- Usage by project / deployment / package / language / category / message
 SELECT * INTO TEMPORARY TABLE usage_by_message FROM (

@@ -5,7 +5,9 @@ import copy
 import datetime
 import json
 import os
+import time
 from pathlib import Path
+from typing import Any
 
 import boto3
 import pg8000
@@ -42,11 +44,36 @@ RECIPIENTS_TABLE_PKEY = 'recipientid'
 
 RECIPIENTS_COLUMNS = []
 
-args = None  # argparse object with parsed command line args
+TEMP_RECIPIENTS_TABLE_SQL = '''
+CREATE TEMPORARY TABLE temp_table (
+        recipientid char varying,
+        project char varying,
+        partner char varying,
+        communityname char varying,
+        groupname char varying,
+        affiliate char varying,
+        component char varying,
+        country char varying,
+        region char varying,
+        district char varying,
+        numhouseholds integer,
+        numtbs integer,
+        supportentity char varying,
+        model char varying,
+        language char varying,
+        coordinates point,
+        agent char varying,
+        latitude double precision,
+        longitude double precision,
+        variant char varying
+    );
+'''
+
+args:Any = None  # argparse object with parsed command line args
 
 s3_client = boto3.client('s3')
 
-dropbox = None
+dropbox:Any = None
 
 found_errors = False
 
@@ -119,12 +146,20 @@ def get_secret() -> dict:
     secret_name = "lb_stats_access2"
     region_name = "us-west-2"
 
+    if args.verbose >= 2:
+        report('    Getting credentials for database connection. v2.')
+    start = time.time()
+
     # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(
-        service_name='secretsmanager',
-        region_name=region_name
-    )
+    try:
+        session = boto3.session.Session()
+        client = session.client(
+            service_name='secretsmanager',
+            region_name=region_name
+        )
+    except Exception as e:
+        report('    Exception getting session client: {}, elapsed: {}'.format(str(e), time.time() - start))
+        raise e
 
     # In this sample we only handle the specific exceptions for the 'GetSecretValue' API.
     # See https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
@@ -135,6 +170,9 @@ def get_secret() -> dict:
             SecretId=secret_name
         )
     except ClientError as e:
+        if args.verbose >= 2:
+            report('    Exception getting credentials: {}, elapsed: {}'.format(e.response['Error']['code'], time.time()-start))
+
         if e.response['Error']['Code'] == 'DecryptionFailureException':
             # Secrets Manager can't decrypt the protected secret text using the provided KMS key.
             # Deal with the exception here, and/or rethrow at your discretion.
@@ -154,6 +192,8 @@ def get_secret() -> dict:
         elif e.response['Error']['Code'] == 'ResourceNotFoundException':
             # We can't find the resource that you asked for.
             # Deal with the exception here, and/or rethrow at your discretion.
+            raise e
+        else:
             raise e
     else:
         # Decrypts secret using the associated KMS CMK.
@@ -268,50 +308,66 @@ class ProjectSynchronizer():
         cur = conn.cursor()
 
         if self._recipients_changed:
-            report('   Syncing database recipients for {}'.format(self._project))
-
-            # load temporary table with recipients
-            cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM recipients WHERE FALSE;')
+            skip_loading_recipients = False
             with open(recipients_csv, 'rb') as f:
-                cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
-            num_loaded = cur.rowcount
-            # update into production table
-            update = 'INSERT INTO {0} SELECT * FROM temp_table ON CONFLICT ({1}) DO UPDATE SET '.format(RECIPIENTS_TABLE,
-                                                                                                        RECIPIENTS_TABLE_PKEY)
-            update += ','.join([x + '=EXCLUDED.' + x for x in RECIPIENTS_COLUMNS])
-            update += ';'
-            cur.execute(update)
-            num_updated = cur.rowcount
-            found_errors |= num_updated != num_loaded
-            report('   Recipients updated {} of {} loaded'.format(num_updated, num_loaded))
-            cur.execute('DROP TABLE temp_table;')
+                header_line:str = f.readline().decode('utf-8').strip()
+                headers = header_line.split(',')
+                if 'direct_beneficiaries' in headers:
+                    skip_loading_recipients = True
 
-            # load temporary table with recipients_map
-            cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM recipients_map WHERE FALSE;')
-            with open(recipients_map_csv, 'rb') as f:
-                cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
-            num_loaded = cur.rowcount
-            # update into production table
-            update = 'INSERT INTO recipients_map SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
-            cur.execute(update)
-            num_updated = cur.rowcount
-            report('   Recipients_map updated {} of {} loaded'.format(num_updated, num_loaded))
-            cur.execute('DROP TABLE temp_table;')
+            if skip_loading_recipients:
+                report(f'    Not syncing database recipients for {self._project}; has "direct_beneficiaries" column.')
+            else:
+                report(f'   Syncing database recipients for {self._project}')
 
-            if talkingbook_map_csv.exists():
+                # load temporary table with recipients
+                cur.execute(TEMP_RECIPIENTS_TABLE_SQL)
+                with open(recipients_csv, 'rb') as f:
+                    cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
+                num_loaded = cur.rowcount
+
+                # add the new 'group_size' column.
+                cur.execute('ALTER TABLE temp_table ADD COLUMN group_size INTEGER;')
+                cur.execute('UPDATE temp_table SET group_size = 0;')
+                # update into production table
+                update = 'INSERT INTO {0} SELECT * FROM temp_table ON CONFLICT ({1}) DO UPDATE SET '.format(RECIPIENTS_TABLE,
+                                                                                                            RECIPIENTS_TABLE_PKEY)
+                update += ','.join([x + '=EXCLUDED.' + x for x in RECIPIENTS_COLUMNS])
+                update += ';'
+                cur.execute(update)
+                num_updated = cur.rowcount
+                found_errors |= num_updated != num_loaded
+                report('   Recipients updated {} of {} loaded'.format(num_updated, num_loaded))
+                cur.execute('DROP TABLE temp_table;')
+
                 # load temporary table with recipients_map
-                cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM ' + TALKINGBOOK_MAP + ' WHERE FALSE;')
-                with open(talkingbook_map_csv, 'rb') as f:
+                cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM recipients_map WHERE FALSE;')
+                with open(recipients_map_csv, 'rb') as f:
                     cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
                 num_loaded = cur.rowcount
                 # update into production table
-                update = 'INSERT INTO ' + TALKINGBOOK_MAP + ' SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
+                update = 'INSERT INTO recipients_map SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
                 cur.execute(update)
                 num_updated = cur.rowcount
-                report('   Talkingbook_map updated {} of {} loaded'.format(num_updated, num_loaded))
+                report('   Recipients_map updated {} of {} loaded'.format(num_updated, num_loaded))
                 cur.execute('DROP TABLE temp_table;')
 
+                if talkingbook_map_csv.exists():
+                    # load temporary table with recipients_map
+                    cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM ' + TALKINGBOOK_MAP + ' WHERE FALSE;')
+                    with open(talkingbook_map_csv, 'rb') as f:
+                        cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
+                    num_loaded = cur.rowcount
+                    # update into production table
+                    update = 'INSERT INTO ' + TALKINGBOOK_MAP + ' SELECT * FROM temp_table ON CONFLICT DO NOTHING;'
+                    cur.execute(update)
+                    num_updated = cur.rowcount
+                    report('   Talkingbook_map updated {} of {} loaded'.format(num_updated, num_loaded))
+                    cur.execute('DROP TABLE temp_table;')
+
         if self._deployments_changed:
+            report('   Syncing deployments for {}'.format(self._project))
+
             # deployment_spec -> deployments
             cur.execute(
                 'CREATE TEMPORARY TABLE temp_table (project TEXT, deployment_num INTEGER, startdate DATE, enddate DATE, component TEXT, name TEXT);')
@@ -409,6 +465,8 @@ class ProjectSynchronizer():
                     Path(entry).unlink()
 
         if self._recipients_changed or self._deployments_changed:
+            if args.verbose >= 2:
+                report('  Updating tables')
             self.update_tables()
 
         self.write_local_etags()
@@ -501,7 +559,13 @@ class ProjectSynchronizer():
 # Iterate over projects, and sync them one by one.
 def sync_projects(projects):
     global found_errors
+
+    print('Synchronizing progspec directories.')
+
     for proj in projects:
+        if args.verbose >= 2:
+            report('   Checking sync state for {}'.format(proj))
+
         syncer = ProjectSynchronizer(proj)
         if syncer.scan():
             # Try up to three times, in case of races
