@@ -4,7 +4,7 @@ IFS="`printf '\n\t'`"
 goodIFS="$IFS"
 #CONFIGURATION
 # uncomment next line for script debugging
-#set -x
+set -x
 
 # Set default values for any settings that aren't externally set.
 function setDefaults() {
@@ -43,6 +43,9 @@ function setDefaults() {
     if [ -z "${s3bucket-}" ]; then
         s3bucket="s3://acm-stats"
     fi
+    if [ -z "${ufexporter-}" ]; then
+        ufexporter=${dropbox}/AWS-LB/bin/ufUtility/ufUtility.py
+    fi
     needcss=true
     verbose=true
     execute=true
@@ -74,6 +77,7 @@ function configure() {
 
     s3import="${s3bucket}/collected-data"
     s3archive="${s3bucket}/archived-data/${curYear}/${curMonth}/${curDay}"
+    s3uf="s3://amplio-uf/collected"
 
     recipientsfile="${dailyDir}/recipients.csv"
     recipientsmapfile="${dailyDir}/recipients_map.csv"
@@ -92,10 +96,11 @@ function main() {
     configure
 
     gatherFiles
+    importUserFeedback ${dailyDir}
+
     if ${gatheredAny} ; then
         getRecipientMap ${dailyDir}
 
-        importUserFeedback ${dailyDir}
         importStatistics ${dailyDir}
         importDeployments ${dailyDir}
         sendMail
@@ -109,19 +114,19 @@ function main() {
 # Gathers the new files, from Dropbox and from s3.
 function gatherFiles() {
     # gather from dropbox
-    echo "Gather from Dropbox"
-    time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats ${importdir} ${dailyDir} ${timestamp} --report movedbx.txt
-    if [ $? -eq 0 ]; then
-        gatheredAny=true
-        if [ -s acm.log ]; then
-            # Log file from MoveStats above.
-            mv acm.log ${dailyDir}/movedbx.log
-        fi
-        if [ -s movedbx.txt ]; then
-            # Log file from MoveStats above.
-            mv movedbx.txt ${dailyDir}/movedbx.txt
-        fi
-    fi
+    # echo "Gather from Dropbox"
+    # time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats ${importdir} ${dailyDir} ${timestamp} --report movedbx.txt
+    # if [ $? -eq 0 ]; then
+    #     gatheredAny=true
+    #     if [ -s acm.log ]; then
+    #         # Log file from MoveStats above.
+    #         mv acm.log ${dailyDir}/movedbx.log
+    #     fi
+    #     if [ -s movedbx.txt ]; then
+    #         # Log file from MoveStats above.
+    #         mv movedbx.txt ${dailyDir}/movedbx.txt
+    #     fi
+    # fi
 
     # gather from s3
     echo "Gather from s3"
@@ -176,27 +181,28 @@ function findZips() {
 # Import user feedback to ACM-{project}-FB-{update}
 function importUserFeedback() {
     local dailyDir=$1&&shift
-    echo "Import user feedback to ACM-{project}-FB-{update}."
     local recordingsDir=${dailyDir}/userrecordings
-    local processedDir=${dailyDir}/recordingsprocessed
-    local skippedDir=${dailyDir}/recordingsskipped
+
+
     if [ -d "${recordingsDir}" ]; then
-        # Capture a list of all the files to be imported
-        ls -lR ${recordingsDir}>${dailyDir}/files.log
-        local importer=org.literacybridge.acm.utils.FeedbackImporter
-        mkdir -p ${processedDir}
-        mkdir -p ${skippedDir}
-        echo " User feedback from: ${recordingsDir}"
-        echo "       processed to: ${processedDir}"
-        echo "         skipped to: ${skippedDir}"
-        java -cp ${acm}/acm.jar:${acm}/lib/* ${importer} ${recordingsDir} --processed ${processedDir} --skipped ${skippedDir} --report ${report}
-        if [ -s acm.log ]; then
-            # Log file from FeedbackImporter
-            mv acm.log ${recordingsDir}/feedbackimporter.log
-        fi
+        echo "Export user feedback from ${recordingsDir} and upload to ${s3uf}"
+        # using "mktemp -d" only for a unique name.
+        tmpname=$(mktemp -d)
+        rm -rf ${tmpname}
+        tmpdir=~/importUserFeedback${tmpname}
+        mkdir -p ${tmpdir}
+        echo "uf temp:${tmpdir}"
+
+        python3 ${ufexporter} -vv extract_uf ${recordingsDir} --out ${tmpdir}
+        aws s3 mv --recursive ${tmpdir} ${s3uf}
+
+        find ${tmpdir}
+        rm -rf ${tmpdir}/*
+        rmdir -p --ignore-fail-on-non-empty ${tmpdir}
     else
         echo "No directory ${recordingsDir}"
     fi
+
 }
 
 # injects css, if not already done

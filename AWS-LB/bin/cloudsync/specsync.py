@@ -236,7 +236,11 @@ def get_db_connection():
 
         cur = db_connection.cursor()
         cur.execute('SELECT * FROM ' + RECIPIENTS_TABLE + ' LIMIT 1;')
-        RECIPIENTS_COLUMNS = [x for x in [x[0].decode('ascii') for x in cur.description] if x != RECIPIENTS_TABLE_PKEY]
+        try:
+            RECIPIENTS_COLUMNS = [x for x in [x[0].decode('ascii') for x in cur.description] if x != RECIPIENTS_TABLE_PKEY]
+        except Exception as ex:
+            # pg8000 made a breaking change, this is the new way to read the descriptions.
+            RECIPIENTS_COLUMNS = [x for x in [x[0] for x in cur.description] if x != RECIPIENTS_TABLE_PKEY]
 
     return db_connection
 

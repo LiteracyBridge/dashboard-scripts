@@ -243,7 +243,7 @@ function importStatistics() {
             $execute && "${import[@]}"
  
             processed=$[processed+1]
-            if [ $processed -ge $limit ]; then exit 1; fi
+            if [ $processed -ge $limit ]; then break; fi
         elif [ -d "${statdir}" ]; then
             $verbose && echo "No zips in ${statdir}"
         fi

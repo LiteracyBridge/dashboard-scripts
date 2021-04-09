@@ -1,3 +1,5 @@
 .DS_Store
 core-with-deps.jar
 .idea
+__pycache__/
+*~
