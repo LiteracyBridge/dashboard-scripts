@@ -18,3 +18,4 @@ tbcdid
 stats_timestamp
 deployment_timestamp
 recipientid
+deployment_uuid
