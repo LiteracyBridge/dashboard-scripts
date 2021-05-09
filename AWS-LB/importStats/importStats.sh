@@ -98,6 +98,7 @@ function main() {
     gatherFiles
     importUserFeedback ${dailyDir}
 
+    echo "Gathered? ${gatheredAny}"
     if ${gatheredAny} ; then
         getRecipientMap ${dailyDir}
 
@@ -128,6 +129,7 @@ function gatherFiles() {
     #     fi
     # fi
 
+    set -x
     # gather from s3
     echo "Gather from s3"
     tmpdir=$(mktemp -d)
@@ -141,6 +143,7 @@ function gatherFiles() {
     statslist="$(cd ${tmpdir}; findZips)"
 
     # process into collected-data
+    echo "Process into collected-data"
     time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats -b blacklist.txt ${tmpdir} ${dailyDir} ${timestamp}
     if [ $? -eq 0 ]; then
         gatheredAny=true
@@ -151,6 +154,7 @@ function gatherFiles() {
     fi
 
     # move s3 files from import to archive "folder".
+    echo "Archive s3 objects"
     for statfile in ${statslist}; do
 #        echo ${statfile}
         aws s3 mv ${s3import}/${statfile} ${s3archive}/${statfile}>>reports3.raw
@@ -168,6 +172,7 @@ function gatherFiles() {
         cat rpt.html >>${report}
     fi
     rmdir ${tmpdir}
+    set +x
 }
 
 # Finds files named *.zip in the current directory. Returns one file name per line.
@@ -184,6 +189,7 @@ function importUserFeedback() {
     local recordingsDir=${dailyDir}/userrecordings
 
 
+    echo "Checking for user feedback recordings"
     if [ -d "${recordingsDir}" ]; then
         echo "Export user feedback from ${recordingsDir} and upload to ${s3uf}"
         # using "mktemp -d" only for a unique name.

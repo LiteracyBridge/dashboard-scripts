@@ -53,7 +53,9 @@ CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
       ps.half,
       ps.quarter,
       ps.started,
-      ps.tbcdid
+      ps.tbcdid,
+      ps.deployment_timestamp,
+      ps.deployment_uuid
     FROM playstatistics ps
       JOIN contentmetadata2 cm
         ON ps.contentid = cm.contentid AND ps.project=cm.project
@@ -106,7 +108,9 @@ SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
       uib.half,
       uib.quarter,
       uib.started,
-      uib.tbcdid
+      uib.tbcdid,
+      uib.deployment_timestamp,
+      uib.deployment_uuid
 
     FROM
       usage_info_base_view uib

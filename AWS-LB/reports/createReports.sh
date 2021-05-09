@@ -125,7 +125,7 @@ EndOfQuery
 #
 function runBatchedQueries() {
 echo 'BATCHED PSQL REPORTS'
-$psql $dbcxn <<EndOfQuery >log.txt
+$psql $dbcxn --pset pager=off<<EndOfQuery >log.txt
 \\timing
 \\set ECHO all
 $(cat ${helpers})

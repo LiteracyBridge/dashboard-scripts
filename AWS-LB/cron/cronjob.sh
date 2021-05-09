@@ -35,7 +35,7 @@ function doTask() {
     fi
 }
 
-doTask dropbox
+#doTask dropbox
 
 doTask stats
 
