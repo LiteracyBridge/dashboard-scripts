@@ -1,96 +1,55 @@
 import argparse
 import csv
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Tuple, Dict, Union, Any
+from typing import Tuple, Union, Any
 
 from A18Processor import A18Processor
 from ArgParseActions import StorePathAction, StoreFileExtension
+from UfBundler import UfBundler
+from UfMetadata import UfMetadata
 from a18file import A18File
 from dbutils import DbUtils
-from UfPropertiesProcessor import UfPropertiesProcessor
 from filesprocessor import FilesProcessor
 
 args: Any = None
 
 dbUtils: DbUtils
 
-propertiesProcessor: Union[None, UfPropertiesProcessor] = None
+propertiesProcessor: Union[None, UfMetadata] = None
 
 
-def bundle_uf() -> Tuple[int, int, int, int]:
-    def t(s):
-        """
-        Format time 'h:mm:ss', 'mm:ss', or 'ss seconds'
-        :param s: time in seconds
-        :return: time as formatted string
-        """
-        h, m = divmod(s, 3600)
-        m, s = divmod(m, 60)
-        if h:
-            return f'{h}:{m:02}:{s:02}'
-        if m:
-            return f'{m}:{s:02}'
-        return f'{s} seconds'
-
-    @dataclass
-    class BundleInfo:
-        language: str = ''
-        uf_list: List[DbUtils.UfRecord] = field(default_factory=list)
-        seconds: int = 0
-        bytes: int = 0
-
+def _do_bundle() -> Tuple[int, int, int, int, int]:
     global args
     if not args.program or not args.depl:
         raise (Exception('Must specify both --program and --depl'))
-    max_files = args.max_files or 1000
-    max_bytes = args.max_bytes or 10_000_000  # 10 MB
-    min_duration = 5
-    max_duration = 300
-    db = DbUtils(args)
-    rows: List[DbUtils.UfRecord] = db.get_uf_records(programid=args.program, deploymentnumber=args.depl)
+    only_zip: bool = args.only_zip
+    rebundle = args.rebundle
+    bundle_uuids = args.bundle_uuid or None
+    if bundle_uuids and not only_zip:
+        raise (Exception('Must specify --only-zip with --bundle-uuid'))
+    kwargs = {
+        'max_files': args.max_files or 1000,
+        'max_bytes': args.max_bytes or 10_000_000,  # 10 MB
+        'min_uf_duration': 5,
+        'max_uf_duration': 300,
+        'bucket': args.bucket or None
+    }
+    programid = args.program
+    deployment_number = args.depl
 
-    good_uf = [x for x in rows if
-               x.bundleid is None and x.length_seconds >= min_duration and x.length_seconds <= max_duration]
-    print(f'Received {len(rows)} rows, {len(good_uf)} meet length criteria.')
-
-    partitions: List[BundleInfo] = []
-    current_partitions: Dict[str, BundleInfo] = {}
-    for ix in range(0, len(good_uf)):
-        uf = good_uf[ix]
-        language = uf.language
-        current_partition = current_partitions.setdefault(language, BundleInfo(language=language))
-        # Does this message fit?
-        if current_partition.bytes + uf.length_bytes > max_bytes and len(current_partition.uf_list) > 0:
-            # Didn't fit, save previous partition, create a new, empty one for this language
-            partitions.append(current_partition)
-            current_partition = BundleInfo(language=language)
-            current_partitions[language] = current_partition
-        # Add message to current partition.
-        current_partition.uf_list.append(uf)
-        current_partition.bytes += uf.length_bytes
-        current_partition.seconds += uf.length_seconds
-    # Capture the partitions that were "in progress"
-    for p in current_partitions.values():
-        partitions.append(p)
-
-    print(f'{len(partitions)} partitions:')
-    for p in partitions:
-        print(f'   {p.language}: {len(p.uf_list)} files, {t(p.seconds)} total, {p.bytes:,} bytes.')
-
-    # Call partitions "directories" and good_uf "files"
-    return len(partitions), len(good_uf), 0, 0
+    bundler = UfBundler(programid, deployment_number, **kwargs)
+    return bundler.make_bundles(zip=not args.no_zip, only_zip=only_zip, bundle_uuid=bundle_uuids, rebundle=rebundle)
 
 
-def list_a18_metadata() -> Tuple[int, int, int, int, int]:
+def _do_list_properties_files() -> Tuple[int, int, int, int, int]:
     global args
 
     def acceptor(p: Path) -> bool:
         return p.suffix.lower() == '.a18'
 
     def processor(p: Path) -> None:
-        a18_file = A18File(p, args)
+        a18_file = A18File(p, verbose=args.verbose, dry_run=args.dry_run)
         metadata = a18_file.metadata
         if metadata is not None:
             key_width = max([len(k) for k in metadata.keys()])
@@ -99,10 +58,10 @@ def list_a18_metadata() -> Tuple[int, int, int, int, int]:
 
     fp: FilesProcessor = FilesProcessor(args.files)
     ret = fp.process_files(acceptor, processor, limit=args.limit, verbose=args.verbose)
-    return ret
+    return ret  # n_dirs, n_files, n_skipped, n_missing, n_errors
 
 
-def create_properties() -> Tuple[int, int, int, int, int]:
+def _do_create_properties_files() -> Tuple[int, int, int, int, int]:
     """
     Try to create a .properties file from .a18 files.
     :return: file and directory counts
@@ -115,7 +74,7 @@ def create_properties() -> Tuple[int, int, int, int, int]:
     def a18_processor(p: Path):
         community = p.parent.name
         recipientid = recipients_map.get(community.upper())
-        a18_file = A18File(p, args)
+        a18_file = A18File(p, verbose=args.verbose, dry_run=args.dry_run)
         kwargs = {
             'recipientid': recipientid,
             'programid': args.program,
@@ -134,39 +93,40 @@ def create_properties() -> Tuple[int, int, int, int, int]:
 
     processor: FilesProcessor = FilesProcessor(args.files)
     ret = processor.process_files(a18_acceptor, a18_processor, limit=args.limit, verbose=args.verbose)
-    return ret
+    return ret  # n_dirs, n_files, n_skipped, n_missing, n_errors
 
 
-def convert_files() -> Tuple[int, int, int, int, int]:
+def _do_convert_audio_format() -> Tuple[int, int, int, int, int]:
     global args
     processor: A18Processor = A18Processor(args.files)
     ret = processor.convert_a18_files(format=args.format, limit=args.limit, verbose=args.verbose)
-    # ret = processor.process('convert')
-    return ret
+    return ret  # n_dirs, n_files, n_skipped, n_missing, n_errors
 
 
-def extract_uf_files() -> Tuple[int, int, int, int, int]:
+def _do_extract_uf() -> Tuple[int, int, int, int, int]:
     global args
-    processor: A18Processor = A18Processor(args.files, args)
+    processor: A18Processor = A18Processor(args.files)
     ret = processor.extract_uf_files(no_db=args.no_db, format=args.format, limit=args.limit, verbose=args.verbose)
     propertiesProcessor.commit()
-    return ret
+    return ret  # n_dirs, n_files, n_skipped, n_missing, n_errors
 
 
-def import_uf_metadata() -> Tuple[int, int, int, int, int]:
+def _do_import_uf_metadata() -> Tuple[int, int, int, int, int]:
     """
     Imports the contents of .properties files to PostgreSQL, uf_metadata table.
     :return: counts of files & directories processed.
     """
-    global args, propertiesProcessor
+    global args
 
-    ret = propertiesProcessor.add_from_files(args.files)
-    propertiesProcessor.commit()
-    return ret
+    ufMetadata = UfMetadata()
+
+    ret = ufMetadata.add_from_files(args.files)
+    ufMetadata.commit()
+    return ret  # n_dirs, n_files, n_skipped, n_missing, n_errors
 
 
 def main():
-    global args, propertiesProcessor
+    global args, dbUtils, propertiesProcessor
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--verbose', '-v', action='count', default=0, help="More verbose output.")
     arg_parser.add_argument('--dry-run', '-n', action='store_true', default=False, help='Don\'t update anything.')
@@ -176,12 +136,14 @@ def main():
 
     subparsers = arg_parser.add_subparsers(dest="'Sub-command.'", required=True, help='Command descriptions')
 
+    # List the contents of .properties files ("sidecar" files).
     list_parser = subparsers.add_parser('list', help='List the metadata from .a18 files.')
-    list_parser.set_defaults(func=list_a18_metadata)
+    list_parser.set_defaults(func=_do_list_properties_files)
     list_parser.add_argument('files', nargs='+', action=StorePathAction, help='Files and directories to be listed.')
 
+    # Convert audio from .a18 to another audio format.
     convert_parser = subparsers.add_parser('convert', help='Convert files to another format.')
-    convert_parser.set_defaults(func=convert_files)
+    convert_parser.set_defaults(func=_do_convert_audio_format)
     convert_parser.add_argument('files', nargs='+', action=StorePathAction,
                                 help='Files and directories to be converted.')
     convert_parser.add_argument('--out', action=StorePathAction,
@@ -190,9 +152,10 @@ def main():
                                 action=StoreFileExtension,
                                 help='Audio format desired for the convert option.')
 
+    # Create .properties files, where possible, for UF .a18 files.
     create_properties_parser = subparsers.add_parser('create_properties',
                                                      help='Try to create a .properties file from a .a18 file.')
-    create_properties_parser.set_defaults(func=create_properties)
+    create_properties_parser.set_defaults(func=_do_create_properties_files)
     create_properties_parser.add_argument('files', nargs='+', action=StorePathAction,
                                           help='Files and directories to be extracted.')
     create_properties_parser.add_argument('--map', required=True, action=StorePathAction,
@@ -202,8 +165,9 @@ def main():
     create_properties_parser.add_argument('--depl', required=True, type=int,
                                           help='Deployment from which the files were derived.')
 
+    # Extract UF from the statistics uploads.
     extract_uf_parser = subparsers.add_parser('extract_uf', help='Extract user feedback audio files and metadata.')
-    extract_uf_parser.set_defaults(func=extract_uf_files)
+    extract_uf_parser.set_defaults(func=_do_extract_uf)
     extract_uf_parser.add_argument('files', nargs='+', action=StorePathAction,
                                    help='Files and directories to be extracted.')
     extract_uf_parser.add_argument('--no-db', action='store_true', default=False,
@@ -214,18 +178,28 @@ def main():
                                    action=StoreFileExtension,
                                    help='Audio format desired for the extracted user feedback.')
 
+    # Import extracted metadata into PostgreSQL.
     import_parser = subparsers.add_parser('import', help='Import extracted UF metadata into PostgreSQL.')
-    import_parser.set_defaults(func=import_uf_metadata)
+    import_parser.set_defaults(func=_do_import_uf_metadata)
     import_parser.add_argument('files', nargs='+', action=StorePathAction, help='Files and directories to be imported.')
 
+    # bundle user feedback.
     bundle_parser = subparsers.add_parser('bundle', help='Bundle user feedback into manageable groups.')
-    bundle_parser.set_defaults(func=bundle_uf)
+    bundle_parser.set_defaults(func=_do_bundle)
     bundle_parser.add_argument('--program', type=str, help='Program for which to bundle uf.')
     bundle_parser.add_argument('--depl', type=int, help='Deployment in the program for which to bundle uf.')
     bundle_parser.add_argument('--max-bytes', '-mb', type=int, help='Maximum aggregate size of files to bundle.')
     bundle_parser.add_argument('--max-files', '-mf', type=int, help='Maximum number of files to bundle together.')
     bundle_parser.add_argument('--max-duration', '-md', type=int,
                                help='Maximum number of combined seconds to bundle together.')
+    bundle_parser.add_argument('--no-zip', action='store_true', default=False,
+                               help='Don\'t zip the bundled files together.')
+    bundle_parser.add_argument('--only-zip', action='store_true', default=False, help='Only zip existing bundles.')
+    bundle_parser.add_argument('--rebundle', action='store_true', default=False, help='Remove existing bundle ids, and re-bundle.')
+    bundle_parser.add_argument('--bundle-uuid', type=str, nargs='+',
+                               help='With --only-zip, limit zip to the given bundle uuids.')
+    bundle_parser.add_argument('--bucket', type=str,
+                               help='Optional bucket for .zip file objects, default downloads.amplio.org')
 
     # database overrides
     arg_parser.add_argument('--db-host', default=None, metavar='HOST',
@@ -242,8 +216,18 @@ def main():
     args = arg_parser.parse_args()
     if args.verbose > 2:
         print(f'Verbose setting: {args.verbose}.')
-
-    propertiesProcessor = UfPropertiesProcessor(args=args)
+    dbArgs = {
+        'verbose': args.verbose,
+        'db_host': args.db_host,
+        'db_port': args.db_port,
+        'db_user': args.db_user,
+        'db_password': args.db_password,
+        'db_name': args.db_name
+    }
+    # Instantiate the db interface very early so that the connection parameters are set before the
+    # database connection is needed.
+    dbUtils = DbUtils(**dbArgs)
+    propertiesProcessor = UfMetadata()
 
     timer = -time.time_ns()
     n_dirs, n_files, n_skipped, n_missing, n_errors = args.func()

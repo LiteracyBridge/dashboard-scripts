@@ -1,93 +1,44 @@
 import base64
 import json
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, date
-from typing import Dict, List, Union, Tuple, Any, Callable
+from typing import Dict, List, Union, Tuple, Any
 
 import boto3 as boto3
 import pg8000 as pg8000
 from botocore.exceptions import ClientError
 from pg8000 import Cursor, Connection
 
-MD_MESSAGE_UUID_TAG = 'metadata.MESSAGE_UUID'
+from UfRecord import uf_column_map, UfRecord
 
 recipient_cache: Dict[str, Dict[str, str]] = {}
 
 _db_connection: Union[Connection, None] = None
 
 
-def make_date_extractor(md_field: str) -> Callable:
-    """
-    Create and return a function that will extract a date, validate it, and return an ISO formatted
-    date if it is valid, or an empty string if it is not.
-
-    We need this because the "date recorded" field is directly from the Talking Book, and, as such,
-    is very likely to contain garbage.
-    :param md_field: The name of the field that may or may not contain a valid date.
-    :return: a function that accepts a Dict[str,str] and returns a str containing an ISO date.
-    """
-    def extract(props:Dict[str,str]) -> str:
-        ds=''
-        v = props.get(md_field, '')
-        try:
-            d = datetime.strptime(v, '%Y/%m/%d')
-            ds = d.strftime('%Y%m%d')
-        except Exception:
-            pass
-        return ds
-    return extract
-
-def _make_early_date() -> datetime:
-    return datetime(2018,1,1)
-
-uf_column_map = {
-    # column:name : property_name or [prop1, prop2, ...]
-    'message_uuid': 'metadata.MESSAGE_UUID',
-
-    #'deployment_uuid': 'DEPLOYEDUUID', # Timestamp is probably sufficient
-    'programid': 'PROJECT',
-    'deploymentnumber': 'DEPLOYMENT_NUMBER',
-    'recipientid': 'RECIPIENTID',
-    'talkingbookid': 'TALKINGBOOKID',
-    'deployment_tbcdid': 'TBCDID',
-    'deployment_timestamp': 'TIMESTAMP',
-    'deployment_user': 'USERNAME',
-    'test_deployment': 'TESTDEPLOYMENT',
-    #'collection_uuid': 'collection.STATSUUID', # Timestamp is probably sufficient
-    'collection_tbcdid': 'collection.TBCDID',
-    'collection_timestamp': 'collection.TIMESTAMP',
-    'collection_user': ['collection.USEREMAIL', 'collection.USERNAME'],
-    'length_seconds': 'metadata.SECONDS',
-    'length_bytes': 'metadata.BYTES',
-    'language': 'metadata.LANGUAGE',
-    'date_recorded': make_date_extractor('metadata.DATE_RECORDED'),
-    'relation': 'metadata.RELATION',
-}
-uf_default_values_map = {
-    'deployment_timestamp': '180101',
-    'test_deployment': 'f',
-    'collection_timestamp' : '180103',
-    'date_recorded': '180102'
-}
-
 # noinspection SqlDialectInspection ,SqlNoDataSourceInspection
 class DbUtils:
     _instance = None
 
+    # This class is a singleton. 
     def __new__(cls, **kwargs):
         if cls._instance is None:
             print('Creating the DbUtils object')
             cls._instance = super(DbUtils, cls).__new__(cls)
             cls._props: List[Tuple] = []
-            cls._args = kwargs.get('args')
+            cls._verbose = kwargs.get('verbose', 0)
+            cls._db_host = kwargs.get('db_host')
+            cls._db_port = kwargs.get('db_port')
+            cls._db_user = kwargs.get('db_user')
+            cls._db_password = kwargs.get('db_password')
+            cls._db_name = kwargs.get('db_name')
+
         return cls._instance
 
     def _get_secret(self) -> dict:
         secret_name = "lb_stats_access2"
         region_name = "us-west-2"
 
-        if self._args.verbose >= 2:
+        if self._verbose >= 2:
             print('    Getting credentials for database connection. v2.')
         start = time.time()
 
@@ -111,7 +62,7 @@ class DbUtils:
                 SecretId=secret_name
             )
         except ClientError as e:
-            if self._args.verbose >= 2:
+            if self._verbose >= 2:
                 print('    Exception getting credentials: {}, elapsed: {}'.format(e.response['Error']['code'],
                                                                                   time.time() - start))
 
@@ -157,16 +108,16 @@ class DbUtils:
 
             parms = {'database': 'dashboard', 'user': secret['username'], 'password': secret['password'],
                      'host': secret['host'], 'port': secret['port']}
-            if self._args.db_host:
-                parms['host'] = self._args.db_host
-            if self._args.db_port:
-                parms['port'] = int(self._args.db_port)
-            if self._args.db_user:
-                parms['user'] = self._args.db_user
-            if self._args.db_password:
-                parms['password'] = self._args.db_password
-            if self._args.db_name:
-                parms['database'] = self._args.db_name
+            if self._db_host:
+                parms['host'] = self._db_host
+            if self._db_port:
+                parms['port'] = int(self._db_port)
+            if self._db_user:
+                parms['user'] = self._db_user
+            if self._db_password:
+                parms['password'] = self._db_password
+            if self._db_name:
+                parms['database'] = self._db_name
 
             _db_connection = pg8000.connect(**parms)
 
@@ -194,18 +145,19 @@ class DbUtils:
         columns = {'recipientid': 'recipientid', 'project': 'program', 'partner': 'customer', 'affiliate': 'affiliate',
                    'country': 'country', 'region': 'region',
                    'district': 'district', 'communityname': 'community', 'groupname': 'group', 'agent': 'agent',
-                   'language': 'language', 'model': 'model'}
+                   'language': 'language', 'listening_model': 'listening_model'}
         # select recipientid, project, ... from recipients where recipientid = '0123abcd4567efgh';
         command = f'select {",".join(columns.keys())} from recipients where recipientid=:recipientid;'
         values = {'recipientid': recipientid}
 
         recipient_info: Dict[str, str] = {}
         try:
+            result_keys: List[str] = list(columns.values())
             cursor.execute(command, values)
             for row in cursor:
-                cols: List[str] = list(columns.values())
-                for col in cols:
-                    recipient_info[col] = row[cols.index(col)]
+                # Copy the recipient info, translating from the database names to the local names.
+                for key in result_keys:
+                    recipient_info[key] = row[result_keys.index(key)]
         except Exception:
             pass
         recipient_cache[recipientid] = recipient_info
@@ -222,56 +174,29 @@ class DbUtils:
         for row in cursor:
             return str(row[0])
 
-    def insert_uf_records(self, uf_list: List[Tuple]) -> Any:
+    def insert_uf_records(self, uf_items: List[Tuple]) -> Any:
         cursor: Cursor = self.db_connection.cursor()
         cursor.paramstyle = 'numeric'
-        if self._args.verbose >= 1:
-            print(f'Adding {len(uf_list)} records to uf_messages')
+        if self._verbose >= 1:
+            print(f'Adding {len(uf_items)} records to uf_messages')
 
         columns = list(uf_column_map.keys())
-        column_numbers = [f':{ix+1}' for ix in range(0,len(columns))]
+        column_numbers = [f':{ix + 1}' for ix in range(0, len(columns))]
 
         command = f"INSERT INTO uf_messages " \
                   f"({', '.join(columns)}) VALUES ({', '.join(column_numbers)})" \
                   f"ON CONFLICT(message_uuid) DO NOTHING;"
-        for uf in uf_list:
-            uf_list = [x for x in uf]
-            for k,v in uf_default_values_map.items():
-                ix = columns.index(k)
-                if not uf_list[ix]:
-                    uf_list[ix] = v
-            cursor.execute(command, uf_list)
+        for uf_item in uf_items:
+            cursor.execute(command, uf_item)
 
         self.db_connection.commit()
-        if self._args.verbose >= 2:
-            print(f'Committed {len(uf_list)} records to uf_messages.')
+        if self._verbose >= 2:
+            print(f'Committed {len(uf_items)} records to uf_messages.')
 
-    @dataclass
-    class UfRecord:
-        message_uuid: str
-        programid: str
-        deploymentnumber: int
-        recipientid: str
-        talkingbookid: str
-        deployment_tbcdid: str
-        deployment_timestamp: datetime = field(default_factory=_make_early_date)
-        deployment_user: str = ''
-        test_deployment: bool = False
-        collection_tbcdid: str = ''
-        collection_timestamp: datetime = field(default_factory=_make_early_date)
-        collection_user: str = ''
-        length_seconds: int = 0
-        length_bytes: int = 0
-        language: str = 'en'
-        date_recorded: date = field(default_factory=_make_early_date)
-        relation: str = ''
-        bundleid: str = None
-
-
-    def get_uf_records(self, programid:str, deploymentnumber:int) -> List[UfRecord]:
+    def get_uf_records(self, programid: str, deploymentnumber: int) -> List[UfRecord]:
         cursor: Cursor = self.db_connection.cursor()
         cursor.paramstyle = 'named'
-        if self._args.verbose >= 1:
+        if self._verbose >= 1:
             print(f'Getting uf records for {programid} / {deploymentnumber}.')
 
         result = []
@@ -280,7 +205,31 @@ class DbUtils:
         options = {'programid': programid, 'deploymentnumber': deploymentnumber}
         cursor.execute(command, options)
         for row in cursor:
-            result.append(DbUtils.UfRecord(*row))
+            result.append(UfRecord(*row))
         return result
 
+    def update_uf_bundles(self, programid: str, deploymentnumber: int, bundles: Dict[str,List[str]]) -> bool:
+        """
+        Updates the bundle_uuid column of the inidicated messages.
+        :param programid: For an extra validation, the record must belong to this program.
+        :param deploymentnumber: For an extra validation, the record must belong to this deployment.
+        :param bundles: A map of bundle_uuid to list of message_uuid.
+        :return: pass/fail
+        """
+        cursor: Cursor = self.db_connection.cursor()
+        cursor.paramstyle = 'named'
+        if self._verbose >= 1:
+            print(f'Updating uf bundle_uuids for {sum([len(v) for v in bundles.values()])} messages in {programid} / {deploymentnumber}.')
 
+        try:
+            command = "UPDATE uf_messages SET bundle_uuid=:bundle_uuid WHERE message_uuid=:message_uuid AND programid=:programid AND deploymentnumber=:deploymentnumber;"
+            options = {'programid': programid, 'deploymentnumber': deploymentnumber}
+            for bundle_uuid, messages in bundles.items():
+                options['bundle_uuid'] = bundle_uuid
+                for message_uuid in messages:
+                    options['message_uuid'] = message_uuid
+                    cursor.execute(command, options)
+            self.db_connection.commit()
+            return True
+        except Exception as ex:
+            return False

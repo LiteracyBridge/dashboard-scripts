@@ -4,14 +4,14 @@
 # 
 # Useful for jobs that need to run sequentially.
 
-crondir=/home/ec2-user/cron
+crondir=/home/ubuntu/cron
 cronlog=$crondir/cron.log
 jobtime=$(date +%Y%m%d-%H%M%S)
 
 echo "Running cron job at $(date) in $(pwd)" > $cronlog 
-cd /home/ec2-user
+cd /home/ubuntu
 source ./.bash_profile
-export PATH=/home/ec2-user:/home/ec2-user/bin:$PATH
+export PATH=/home/ubuntu:/home/ubuntu/bin:$PATH
 
 function doTask() {
     # 'name' for convenience

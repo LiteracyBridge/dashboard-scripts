@@ -226,9 +226,11 @@ class A18File:
     - Convert the audio file to another format, anything supported by ffmpeg.
     """
 
-    def __init__(self, file_path: Path, args: Any):
-        self._args = args
-        self._db_utils = dbutils.DbUtils(args=args)
+    def __init__(self, file_path: Path, **kwargs):
+        self._verbose = kwargs.get('verbose', 0)
+        self._dry_run = kwargs.get('dry_run', False)
+        self._local_ffmpeg = kwargs.get('ffmpeg', False)
+        self._db_utils = dbutils.DbUtils()
         self._file_path: Path = file_path
         self._metadata: Union[Dict[str, str], None] = None
         self._sidecar_needs_save = False
@@ -362,7 +364,7 @@ class A18File:
                 for k, v in extra_data.items():
                     to_write[k] = v
             save_path: Path = save_as or self.sidecar_path
-            if self._args.dry_run:
+            if self._dry_run:
                 print(f'Dry run, not saving sidecar \'{str(save_path)}\'.')
             else:
                 temp_path = save_path.with_suffix('.new')
@@ -385,7 +387,7 @@ class A18File:
         for k, v in data.items():
             tagged_key = f'{tag}{k}'
             if tagged_key not in self._sidecar_data or self._sidecar_data[tagged_key] != v:
-                if self._args.verbose > 2:
+                if self._verbose > 2:
                     print(f'Adding value to sidecar: "{tagged_key}"="{v}".')
                 self._sidecar_data[tagged_key] = v
                 self._sidecar_needs_save = True
@@ -421,15 +423,15 @@ class A18File:
         elif target_dir.is_file():
             print(f'Target \'{str(target_dir)}\' is not a directory.')
             return None
-        elif self._args.dry_run:
+        elif self._dry_run:
             print(f'Dry run, not exporting audio as \'{str(target_path)}\'.')
             return target_path
 
         if not target_dir.exists():
             target_dir.mkdir(parents=True, exist_ok=True)
 
-        elif self._args.ffmpeg:
-            if self._args.verbose > 0:
+        elif self._local_ffmpeg:
+            if self._verbose > 0:
                 print(f'Exporting audio as \'{str(target_path)}\'.')
             # Run locally installed ffmpeg
             container = 'amplionetwork/abc:1.0'
@@ -445,13 +447,13 @@ class A18File:
             tempfile_pathname: str = f'{tmp_dir.name}/{source_name}.wav'  # ...tmp/foo.a18.wav
             target_pathname: str = str(self._file_path.with_suffix(audio_format))
             ff_command = ['ffmpeg', '-hide_banner', '-y', '-i', tempfile_pathname, target_pathname]
-            if self._args.verbose > 1:
+            if self._verbose > 1:
                 print(' '.join(ff_command))
             ff_result = subprocess.run(ff_command, capture_output=True)
             return target_path if ff_result.returncode == 0 else None
 
         else:
-            if self._args.verbose > 0:
+            if self._verbose > 0:
                 print(f'Exporting audio as \'{str(target_path)}\'.')
             # Run container provided ffmpeg
             platform_args = ['--platform', 'linux/386'] if platform.system().lower() == 'darwin' else []
@@ -460,14 +462,14 @@ class A18File:
                          ['--mount', f'type=bind,source={audio_path}/.,target=/audio', \
                           '--mount', f'type=bind,source={target_dir}/.,target=/out',
                           container, source_name, '/out/' + target_name]
-            if self._args.verbose > 1:
+            if self._verbose > 1:
                 print(' '.join(ac_command))
             ac_result = subprocess.run(ac_command, capture_output=True)
             if ac_result.returncode != 0:
                 if 'cannot connect to the docker daemon' in ac_result.stderr.decode('utf-8').lower():
                     print('It appears that Docker is not running.')
                     raise (Exception('It appears that Docker is not running.'))
-            if self._args.verbose > 1:
+            if self._verbose > 1:
                 print(ac_result)
             return target_path if ac_result.returncode == 0 else None
 
