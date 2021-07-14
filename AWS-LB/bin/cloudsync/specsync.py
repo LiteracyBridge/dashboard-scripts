@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import base64
-import copy
 import datetime
 import json
 import os
@@ -40,10 +39,11 @@ PROGSPEC_FILES_TO_KEEP = [VERSIONS_FILE, 'deployments.csv']
 PROGSPEC_EXTENSIONS_TO_KEEP = ['.xlsx']
 
 RECIPIENTS_TABLE = RECIPIENTS
-RECIPIENTS_TABLE_PKEY = 'recipientid'
+RECIPIENTS_TABLE_PKEY = 'recipients_pkey'
 
 RECIPIENTS_COLUMNS = []
 
+# noinspection SqlResolve,SqlNoDataSourceInspection,SqlDialectInspection
 TEMP_RECIPIENTS_TABLE_SQL = '''
 CREATE TEMPORARY TABLE temp_table (
         recipientid char varying,
@@ -59,21 +59,22 @@ CREATE TEMPORARY TABLE temp_table (
         numhouseholds integer,
         numtbs integer,
         supportentity char varying,
-        model char varying,
+        listening_model char varying,
         language char varying,
         coordinates point,
         agent char varying,
         latitude double precision,
         longitude double precision,
-        variant char varying
+        variant char varying,
+        group_size integer
     );
 '''
 
-args:Any = None  # argparse object with parsed command line args
+args: Any = None  # argparse object with parsed command line args
 
 s3_client = boto3.client('s3')
 
-dropbox:Any = None
+dropbox: Any = None
 
 found_errors = False
 
@@ -85,18 +86,19 @@ projects_updated = set()
 _report = ['Checking for new Program Specifications at {}'.format(datetime.datetime.now())]
 _pending_lines = []
 
+
 def error(line):
-    report('ERROR: {}'.format(line), Print=True)
+    report('ERROR: {}'.format(line), do_print=True)
 
 
-def report(line, Print=False, Hold=False, Reset=False):
+def report(line, do_print=False, do_hold=False, do_reset=False):
     global args, _pending_lines, _report
-    if Reset:
+    if do_reset:
         _pending_lines = []
         if line is None:
             return
-    if Hold:
-        _pending_lines.append((line, Print))
+    if do_hold:
+        _pending_lines.append((line, do_print))
     else:
         if len(_pending_lines) > 0:
             saved = _pending_lines
@@ -104,7 +106,7 @@ def report(line, Print=False, Hold=False, Reset=False):
             for (_line, _print) in saved:
                 report(_line, _print)
         _report.append(line)
-        if Print or args.verbose >= 1:
+        if do_print or args.verbose >= 1:
             print(line)
 
 
@@ -142,7 +144,6 @@ def cannonical_acm_name(project):
 
 # Get the user name and password that we need to sign into the SQL database. Configured through AWS console.
 def get_secret() -> dict:
-    result = ''
     secret_name = "lb_stats_access2"
     region_name = "us-west-2"
 
@@ -171,7 +172,8 @@ def get_secret() -> dict:
         )
     except ClientError as e:
         if args.verbose >= 2:
-            report('    Exception getting credentials: {}, elapsed: {}'.format(e.response['Error']['code'], time.time()-start))
+            report('    Exception getting credentials: {}, elapsed: {}'.format(e.response['Error']['code'],
+                                                                               time.time() - start))
 
         if e.response['Error']['Code'] == 'DecryptionFailureException':
             # Secrets Manager can't decrypt the protected secret text using the provided KMS key.
@@ -237,8 +239,9 @@ def get_db_connection():
         cur = db_connection.cursor()
         cur.execute('SELECT * FROM ' + RECIPIENTS_TABLE + ' LIMIT 1;')
         try:
-            RECIPIENTS_COLUMNS = [x for x in [x[0].decode('ascii') for x in cur.description] if x != RECIPIENTS_TABLE_PKEY]
-        except Exception as ex:
+            RECIPIENTS_COLUMNS = [x for x in [x[0].decode('ascii') for x in cur.description] if
+                                  x != RECIPIENTS_TABLE_PKEY]
+        except Exception:
             # pg8000 made a breaking change, this is the new way to read the descriptions.
             RECIPIENTS_COLUMNS = [x for x in [x[0] for x in cur.description] if x != RECIPIENTS_TABLE_PKEY]
 
@@ -284,8 +287,9 @@ def get_projects(given_projects):
     report('Projects to check: {}'.format(', '.join(projects_to_check)))
     return projects_to_check
 
-class ProjectSynchronizer():
-    def __init__(self, project:str, projspecdir:Path=None):
+
+class ProjectSynchronizer:
+    def __init__(self, project: str, projspecdir: Path = None):
         global dropbox
         self._project = project
         self._server_etags = {}
@@ -300,7 +304,7 @@ class ProjectSynchronizer():
         self._success = False
 
     # Update sql database from recipients file.
-    # noinspection SqlResolve,SqlNoDataSourceInspection
+    # noinspection SqlResolve,SqlNoDataSourceInspection,SqlDialectInspection
     def update_tables(self):
         global args, dropbox, found_errors
         recipients_csv = Path(self._progspecdir, RECIPIENTS_FILE)
@@ -314,7 +318,7 @@ class ProjectSynchronizer():
         if self._recipients_changed:
             skip_loading_recipients = False
             with open(recipients_csv, 'rb') as f:
-                header_line:str = f.readline().decode('utf-8').strip()
+                header_line: str = f.readline().decode('utf-8').strip()
                 headers = header_line.split(',')
                 if 'direct_beneficiaries' in headers:
                     skip_loading_recipients = True
@@ -330,14 +334,13 @@ class ProjectSynchronizer():
                     cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
                 num_loaded = cur.rowcount
 
-                # add the new 'group_size' column.
-                cur.execute('ALTER TABLE temp_table ADD COLUMN group_size INTEGER;')
-                cur.execute('UPDATE temp_table SET group_size = 0;')
                 # update into production table
-                update = 'INSERT INTO {0} SELECT * FROM temp_table ON CONFLICT ({1}) DO UPDATE SET '.format(RECIPIENTS_TABLE,
-                                                                                                            RECIPIENTS_TABLE_PKEY)
+                update = 'INSERT INTO {0} SELECT * FROM temp_table ON CONFLICT ON CONSTRAINT {1} DO UPDATE SET '.format(
+                    RECIPIENTS_TABLE,
+                    RECIPIENTS_TABLE_PKEY)
                 update += ','.join([x + '=EXCLUDED.' + x for x in RECIPIENTS_COLUMNS])
                 update += ';'
+                report(f'    SQL update: {update}')
                 cur.execute(update)
                 num_updated = cur.rowcount
                 found_errors |= num_updated != num_loaded
@@ -358,7 +361,8 @@ class ProjectSynchronizer():
 
                 if talkingbook_map_csv.exists():
                     # load temporary table with recipients_map
-                    cur.execute('CREATE TEMPORARY TABLE temp_table AS SELECT * FROM ' + TALKINGBOOK_MAP + ' WHERE FALSE;')
+                    cur.execute(
+                        'CREATE TEMPORARY TABLE temp_table AS SELECT * FROM ' + TALKINGBOOK_MAP + ' WHERE FALSE;')
                     with open(talkingbook_map_csv, 'rb') as f:
                         cur.execute("COPY temp_table FROM stdin WITH CSV HEADER;", stream=f)
                     num_loaded = cur.rowcount
@@ -374,9 +378,11 @@ class ProjectSynchronizer():
 
             # deployment_spec -> deployments
             cur.execute(
-                'CREATE TEMPORARY TABLE temp_table (project TEXT, deployment_num INTEGER, startdate DATE, enddate DATE, component TEXT, name TEXT);')
+                'CREATE TEMPORARY TABLE temp_table (project TEXT, deployment_num INTEGER, startdate DATE, '
+                'enddate DATE, component TEXT, name TEXT);')
             with open(deployment_spec_csv, 'rb') as f:
-                cur.execute("COPY temp_table FROM stdin WITH DELIMITER ',' CSV HEADER FORCE NOT NULL component;", stream=f)
+                cur.execute("COPY temp_table FROM stdin WITH DELIMITER ',' CSV HEADER FORCE NOT NULL component;",
+                            stream=f)
             num_loaded = cur.rowcount
             # update into production table
             update = 'INSERT INTO deployments ' + \
@@ -402,7 +408,6 @@ class ProjectSynchronizer():
             result[fn] = obj['ETag'][1:-1]  # Amazon adds bogus quotes around value.
         return result
 
-
     # Read the etags properties from the last time we sync'd the project.
     def get_local_etags(self):
         result = {}
@@ -415,7 +420,6 @@ class ProjectSynchronizer():
                     result[parts[0]] = parts[1]
         self._local_etags = result
         return result
-
 
     # Write the etags properties of the files just sync'd
     def write_local_etags(self):
@@ -436,12 +440,12 @@ class ProjectSynchronizer():
         return len(self._needed_etags) > 0
 
     def sync(self):
-        report('Syncing {}'.format(self._project), Hold=True)
+        report('Syncing {}'.format(self._project), do_hold=True)
 
         projects_updated.add(self._project)
 
         # fetch stale and missing files
-        items = {k:v for k,v in self._needed_etags.items()}
+        items = {k: v for k, v in self._needed_etags.items()}
         for fn, etag in items.items():
             if args.verbose >= 2:
                 report('   Syncing file {}'.format(fn))
@@ -474,7 +478,7 @@ class ProjectSynchronizer():
             self.update_tables()
 
         self.write_local_etags()
-        
+
         self._success = True
         return True
 
@@ -484,13 +488,13 @@ class ProjectSynchronizer():
         if len(self._files_removed) > 0:
             report('   Files removed: {}'.format(', '.join(self._files_removed)))
         if len(self._files_updated) == 0 and len(self._files_removed) == 0 and not self._recipients_changed:
-            report('Project {}: no sync needed'.format(self._project), Reset=True)
+            report('Project {}: no sync needed'.format(self._project), do_reset=True)
         elif self._success:
             report('Project {} synced'.format(self._project))
         else:
             report('Project {} failed to fully sync; see previous errors'.format(self._project))
 
-        report(line=None, Reset=True)
+        report(line=None, do_reset=True)
 
     # Check the given project to see if there are progspec files needing downloading.
     # def sync_project(self):

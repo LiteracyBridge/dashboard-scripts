@@ -180,6 +180,9 @@ class DbUtils:
         if self._verbose >= 1:
             print(f'Adding {len(uf_items)} records to uf_messages')
 
+        # It doesn't seem that this should be necessary, but it seems to be.
+        self.db_connection.rollback()
+
         columns = list(uf_column_map.keys())
         column_numbers = [f':{ix + 1}' for ix in range(0, len(columns))]
 

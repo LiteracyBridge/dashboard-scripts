@@ -106,7 +106,7 @@ def _do_convert_audio_format() -> Tuple[int, int, int, int, int]:
 def _do_extract_uf() -> Tuple[int, int, int, int, int]:
     global args
     processor: A18Processor = A18Processor(args.files)
-    ret = processor.extract_uf_files(no_db=args.no_db, format=args.format, limit=args.limit, verbose=args.verbose)
+    ret = processor.extract_uf_files(out_dir=args.out, no_db=args.no_db, format=args.format, limit=args.limit, verbose=args.verbose)
     propertiesProcessor.commit()
     return ret  # n_dirs, n_files, n_skipped, n_missing, n_errors
 
@@ -173,7 +173,7 @@ def main():
     extract_uf_parser.add_argument('--no-db', action='store_true', default=False,
                                    help='Do not update the SQL database.')
     extract_uf_parser.add_argument('--out', action=StorePathAction, required=True,
-                                   help='Output directory for extracted files (default is a temporary directory).')
+                                   help='Output directory for extracted files.')
     extract_uf_parser.add_argument('--format', choices=['mp3', 'aac', 'wma', 'wav', 'ogg'], default='mp3',
                                    action=StoreFileExtension,
                                    help='Audio format desired for the extracted user feedback.')

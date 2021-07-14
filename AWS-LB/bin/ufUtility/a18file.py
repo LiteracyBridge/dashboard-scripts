@@ -297,8 +297,8 @@ class A18File:
                 if save:
                     self.save_sidecar()
                 return True
-            except Exception:
-                pass
+            except Exception as ex:
+                print(f'Exception updating sidecar for \'{str(self._file_path)}\': {str(ex)}')
         return False
 
     def create_sidecar(self, recipientid: str, programid: str, deploymentnumber: int, community: str) -> bool:

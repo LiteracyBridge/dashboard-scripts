@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+#
+# Usage:
+#   cd into a 'daily directory', like 2021/06/01
+#   run this script 
 
 if [ -z "${dropbox-}" ]; then
     dropbox=~/Dropbox

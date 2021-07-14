@@ -42,8 +42,11 @@ class A18Processor(FilesProcessor):
                         metadata = a18_file.save_sidecar(save_as=md_path, extra_data={
                             'metadata.BYTES': str(os.path.getsize(audio_path))})
                         if not no_db:
+                            if verbose > 1:
+                                print(f'Adding metadata properties for {str(a18_path)}.')
                             propertiesProcessor.add_from_dict(metadata)
-
+            else:
+                print(f'Couldn\'t update sidecar for \'{str(a18_path)}\'.')
         propertiesProcessor = UfMetadata()
         no_db = kwargs.get('no_db', False)
         audio_format = kwargs.get('format')
