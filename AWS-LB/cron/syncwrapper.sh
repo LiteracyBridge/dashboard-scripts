@@ -11,7 +11,7 @@ function synchronize() {
     echo "Starting progspec sync in $(pwd) at $(date)"
     export PYTHONPATH=${PYTHONPATH}:${HOME}/Dropbox/AWS-LB/bin
     set -x 
-    python3 -m cloudsync -vv progspecs
+    python3.8 -m cloudsync -vv progspecs
     set +x
     echo "Finished progspec sync at $(date)" 
 }

@@ -23,23 +23,31 @@ def _do_bundle() -> Tuple[int, int, int, int, int]:
     global args
     if not args.program or not args.depl:
         raise (Exception('Must specify both --program and --depl'))
+    dry_run = args.dry_run
+    zip: bool = not args.no_zip and not args.unzipped
     only_zip: bool = args.only_zip
     rebundle = args.rebundle
+    unzipped: bool = args.unzipped
     bundle_uuids = args.bundle_uuid or None
     if bundle_uuids and not only_zip:
         raise (Exception('Must specify --only-zip with --bundle-uuid'))
     kwargs = {
         'max_files': args.max_files or 1000,
         'max_bytes': args.max_bytes or 10_000_000,  # 10 MB
-        'min_uf_duration': 5,
-        'max_uf_duration': 300,
-        'bucket': args.bucket or None
+        'min_uf_duration': args.min_duration if 'min_duration' in args else 5,
+        'max_uf_duration': args.max_duration if 'max_duration' in args else 300,
+        'bucket': args.bucket or None,
+        'dry_run': dry_run,
+        'verbose': args.verbose
     }
+    if 'limit' in args:
+        kwargs['limit'] = args.limit
     programid = args.program
     deployment_number = args.depl
 
     bundler = UfBundler(programid, deployment_number, **kwargs)
-    return bundler.make_bundles(zip=not args.no_zip, only_zip=only_zip, bundle_uuid=bundle_uuids, rebundle=rebundle)
+    return bundler.make_bundles(zip=zip, only_zip=only_zip, bundle_uuid=bundle_uuids, rebundle=rebundle,
+                                unzipped=unzipped)
 
 
 def _do_list_properties_files() -> Tuple[int, int, int, int, int]:
@@ -164,6 +172,8 @@ def main():
                                           help='Program (id) from which the files were derived.')
     create_properties_parser.add_argument('--depl', required=True, type=int,
                                           help='Deployment from which the files were derived.')
+    create_properties_parser.add_argument('--limit', required=False, type=int,
+                                          help='Maximum number of items to process, default no limit.')
 
     # Extract UF from the statistics uploads.
     extract_uf_parser = subparsers.add_parser('extract_uf', help='Extract user feedback audio files and metadata.')
@@ -188,13 +198,16 @@ def main():
     bundle_parser.set_defaults(func=_do_bundle)
     bundle_parser.add_argument('--program', type=str, help='Program for which to bundle uf.')
     bundle_parser.add_argument('--depl', type=int, help='Deployment in the program for which to bundle uf.')
+    bundle_parser.add_argument('--min-duration', type=int, help='Minimimum duration message to keep.')
+    bundle_parser.add_argument('--max-duration', type=int, help='Maximimum duration message to keep.')
     bundle_parser.add_argument('--max-bytes', '-mb', type=int, help='Maximum aggregate size of files to bundle.')
     bundle_parser.add_argument('--max-files', '-mf', type=int, help='Maximum number of files to bundle together.')
-    bundle_parser.add_argument('--max-duration', '-md', type=int,
+    bundle_parser.add_argument('--max-bundle-duration', '-md', type=int,
                                help='Maximum number of combined seconds to bundle together.')
     bundle_parser.add_argument('--no-zip', action='store_true', default=False,
                                help='Don\'t zip the bundled files together.')
     bundle_parser.add_argument('--only-zip', action='store_true', default=False, help='Only zip existing bundles.')
+    bundle_parser.add_argument('--unzipped', action='store_true', default=False, help='Publish files individually, unzipped.')
     bundle_parser.add_argument('--rebundle', action='store_true', default=False, help='Remove existing bundle ids, and re-bundle.')
     bundle_parser.add_argument('--bundle-uuid', type=str, nargs='+',
                                help='With --only-zip, limit zip to the given bundle uuids.')

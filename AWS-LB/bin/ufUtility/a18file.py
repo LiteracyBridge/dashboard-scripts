@@ -430,7 +430,7 @@ class A18File:
         if not target_dir.exists():
             target_dir.mkdir(parents=True, exist_ok=True)
 
-        elif self._local_ffmpeg:
+        if self._local_ffmpeg:
             if self._verbose > 0:
                 print(f'Exporting audio as \'{str(target_path)}\'.')
             # Run locally installed ffmpeg

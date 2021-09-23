@@ -43,7 +43,7 @@ function exportMessagsOneAcm() {
 
 function countCategories() {
     echo $@
-    python categoryCounter.py $@
+    python3.8 categoryCounter.py $@
 }
 
 main "$@"

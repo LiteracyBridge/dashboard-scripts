@@ -7,6 +7,9 @@
 # Sync program specs every 3 minutes
 */3 * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/work/syncwrapper.log
 
+# Missing UF report daily
+0 1 * * * /home/ubuntu/Dropbox/AWS-LB/bin/missing_uf.sh 2>&1 >>/home/ubuntu/work/missing_uf.log
+
 # Run cronjob every minute, for testing
 #* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/test.log
 #* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/template.sh cron/cronvars.sh

@@ -28,7 +28,7 @@ function importUserFeedback() {
         mkdir -p ${tmpdir}
         echo "uf temp:${tmpdir}"
 
-        python3 ${ufexporter} -vv extract_uf ${recordingsDir} --out ${tmpdir}
+        python3.8 ${ufexporter} -vv extract_uf ${recordingsDir} --out ${tmpdir}
         aws s3 mv --recursive ${tmpdir} ${s3uf}
 
         find ${tmpdir}

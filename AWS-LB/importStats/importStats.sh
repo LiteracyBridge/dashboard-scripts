@@ -199,7 +199,7 @@ function importUserFeedback() {
         mkdir -p ${tmpdir}
         echo "uf temp:${tmpdir}"
 
-        python3 ${ufexporter} -vv extract_uf ${recordingsDir} --out ${tmpdir}
+        python3.8 ${ufexporter} -vv extract_uf ${recordingsDir} --out ${tmpdir}
         aws s3 mv --recursive ${tmpdir} ${s3uf}
 
         find ${tmpdir}
@@ -292,7 +292,7 @@ function importDeployments() {
     # Gather the deploymentsAll.log files from the daily directory
     deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.kvp')
     #
-    local extract=(python "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
+    local extract=(python3.8 "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}" | tee -a "${report}.tmp"
   

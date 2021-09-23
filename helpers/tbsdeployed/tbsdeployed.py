@@ -51,23 +51,25 @@ COORDINATES_PATTERN = re.compile('^\\s*\\(?\\s*([+-]?[\\d.]+)[\\s,]*([+-]?[\\d.]
 
 def parse_map_file(filename):
     global recipient_map
-    map_file = open(filename, 'rb')
-    csvfile = csv.reader(map_file, delimiter=',')
-    proj_ix = directory_ix = recip_ix = 0
+    try:
+        map_file = open(filename, 'rt')
+        csvfile = csv.reader(map_file, delimiter=',')
+        proj_ix = directory_ix = recip_ix = 0
 
-    for row in csvfile:
-        if csvfile.line_num == 1:
-            proj_ix = row.index('project')
-            directory_ix = row.index('directory')
-            recip_ix = row.index('recipientid')
-        else:
-            proj = row[proj_ix].upper()
-            directory = row[directory_ix].upper()
-            recipientid = row[recip_ix]
-            if proj not in recipient_map:
-                recipient_map[proj] = {}
-            recipient_map[proj][directory] = recipientid
-
+        for row in csvfile:
+            if csvfile.line_num == 1:
+                proj_ix = row.index('project')
+                directory_ix = row.index('directory')
+                recip_ix = row.index('recipientid')
+            else:
+                proj = row[proj_ix].upper()
+                directory = row[directory_ix].upper()
+                recipientid = row[recip_ix]
+                if proj not in recipient_map:
+                    recipient_map[proj] = {}
+                recipient_map[proj][directory] = recipientid
+    except Exception as ignored:
+        pass
 
 def lookup_recipient(proj, directory):
     global recipient_overrides, recipient_map, proj_warnings, comm_warnings, overrides_used
@@ -97,7 +99,7 @@ def lookup_recipient(proj, directory):
 # Read and process an extract of tbdataoperations,
 def read_tbdataactions(filename):
     global deployments
-    tbdata_file = open(filename, 'rb')
+    tbdata_file = open(filename, 'rt')
     tbdata_csv = csv.reader(tbdata_file, delimiter=',')
     # These two lines are stupid, but quiet lint.
     outsn_ix = updatedatetime_ix = project_ix = deployment_ix = package_ix = community_ix = 0
@@ -170,7 +172,7 @@ def read_tbdataactions(filename):
 # Read an deploymentsAll.log file; comma-separated key:value pairs.
 def read_deployments(filename):
     global deployments
-    deployments_file = open(filename, 'rb')
+    deployments_file = open(filename, 'rt')
     found = 0
     # Map of fields we want to keep to the names by which we wish to keep them.
     keepers = {'sn': 'talkingbookid', 'timestamp': 'deployedtimestamp', 'project': 'project',
@@ -235,7 +237,7 @@ def read_deployments_list(names):
 def write_tbsdeployed(output_name):
     global needHeader, outFile
     if not outFile:
-        outFile = open(output_name, 'wb')
+        outFile = open(output_name, 'wt')
 
     if needHeader:
         # csv header

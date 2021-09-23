@@ -296,13 +296,18 @@ function importDeployments() {
     local deploymentsfile="${dailyDir}/tbsdeployed.csv"
 
     getCss
+    echo "\n\n\n\n*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
+    echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
+    echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
+    echo "\n\n\nRe-importing Deployment installations to database."
+    set -x
     echo "<h2>Re-importing Deployment installations to database.</h2>">>${report}
     rm "${report}.tmp"
 
     # Gather the deploymentsAll.kvp files from the daily directory
     deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.kvp')
     #
-    local extract=(python "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
+    local extract=(python3.8 "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}">>"${report}.tmp"
   
@@ -314,6 +319,7 @@ function importDeployments() {
         \\set ECHO all
         create temporary table tbtemp as select * from tbsdeployed where false;
         \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
+        delete from tbtemp where contentpackage is null;
         delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
         insert into tbsdeployed select * from tbtemp on conflict do nothing;
 EndOfQuery
@@ -327,6 +333,10 @@ EndOfQuery
         awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
         echo '</div>'>>"${report}"
     fi
+    set +x
+    echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
+    echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
+    echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+\n\n\n\n"
 }
 
 function getRecipientMap() {

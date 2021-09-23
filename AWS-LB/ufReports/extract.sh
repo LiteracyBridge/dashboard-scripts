@@ -252,7 +252,7 @@ function getUserFeedbackStats() {
     gatherCategoryCounts "${acm}"
 
     # extract counts in each category. This is what actually drives the dashboard.
-    local cmd="python ${summarizer} messages.csv --categories categories.csv --summary summary.csv"
+    local cmd="python3.8 ${summarizer} messages.csv --categories categories.csv --summary summary.csv"
     printf "%s\n\n" "$(${cmd})">>${report}
 
     # easily identify the data

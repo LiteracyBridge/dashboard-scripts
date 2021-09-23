@@ -29,9 +29,10 @@ pushd reports
 ./createReports.sh
 popd
 
-echo "=========================================================================================="
-echo User Feedback progress reports
-echo .
-pushd ufReports
-./extract.sh
-popd
+# De-implemented 10-Aug-2021
+# echo "=========================================================================================="
+# echo User Feedback progress reports
+# echo .
+# pushd ufReports
+# ./extract.sh
+# popd
