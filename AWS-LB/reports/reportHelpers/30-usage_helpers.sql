@@ -90,6 +90,7 @@ SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
       recip.communityname,
       recip.groupname,
       recip.agent,
+      recip.supportentity,
       uib.talkingbookid,
 
       uib.category,

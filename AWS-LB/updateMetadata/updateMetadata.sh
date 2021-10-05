@@ -61,6 +61,17 @@ function doSqlCommand() {
       # send email here...
   fi
 }
+function doSql() {
+    ${psql} ${dbcxn} -a -v "ON_ERROR_STOP=1" 2>psql.err | indent
+    rc=${PIPESTATUS[0]}
+    echo "rc: ${rc}"
+    if [ $rc -ne 0 ]; then
+        echo "*** error ($rc) running psql query"
+        cat psql.err | indent
+        # send email here...
+    fi
+}
+
 
 # For each project, import the following data (just exported above):
 #     content metadata
@@ -75,11 +86,45 @@ function doSqlCommand() {
 for i in "${projects[@]}"; do
     echo "\n============= Update metadata tables for $i ============="
 
-    # Recreate contentmetadata2 if export file exists.
-    if [ -f $exportdir/$i-metadata.csv ]; then
-        doSqlCommand "DELETE FROM contentmetadata2 WHERE project ='$i'"
-        doSqlCommand "COPY contentmetadata2 FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $exportdir/$i-metadata.csv
+    # Update contentmetadata2 if export file exists.
+    set -x
+    CSV="${exportdir}/${i}-metadata.csv"
+    if [ -f ${CSV} ]; then
+        PROGRAM="${i}"
+        doSql <<EOF
+            \set ECHO all
+            create temporary table cm2 as (select * from contentmetadata2 where false);
+            \COPY cm2 FROM '${CSV}' WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');
+            INSERT INTO contentmetadata2 SELECT * FROM cm2
+                ON CONFLICT ON CONSTRAINT contentmetadata2_pkey DO
+                UPDATE SET
+                  title=EXCLUDED.title,
+                  dc_publisher=EXCLUDED.dc_publisher,
+                  source=EXCLUDED.source,
+                  languagecode=EXCLUDED.languagecode,
+                  relatedid=EXCLUDED.relatedid,
+                  dtb_revision=EXCLUDED.dtb_revision,
+                  duration_sec=EXCLUDED.duration_sec,
+                  format=EXCLUDED.format,
+                  targetaudience=EXCLUDED.targetaudience,
+                  daterecorded=EXCLUDED.daterecorded,
+                  keywords=EXCLUDED.keywords,
+                  timing=EXCLUDED.timing,
+                  speaker=EXCLUDED.speaker,
+                  goal=EXCLUDED.goal,
+                  transcriptionurl=EXCLUDED.transcriptionurl,
+                  notes=EXCLUDED.notes,
+                  community=EXCLUDED.community,
+                  status=EXCLUDED.status,
+                  categories=EXCLUDED.categories,
+                  quality=EXCLUDED.quality,
+                  sdg_goals=EXCLUDED.sdg_goals,
+                  sdg_targets=EXCLUDED.sdg_targets;   
+            \echo Count is rows that could not be inserted.
+            select count(title) from cm2 where contentid not in (select contentid from contentmetadata2 where project='${PROGRAM}');
+EOF
     fi
+    set +x
 
     # Recreate categories if export file exists.
     if [ -f $exportdir/$i-categories.csv ]; then
