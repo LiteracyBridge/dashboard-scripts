@@ -77,6 +77,7 @@ SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
 
       d.deploymentnumber,
       d.deployment,
+      d.deploymentname,
       d.startdate,
       uib.contentpackage,
       uib.languagecode,

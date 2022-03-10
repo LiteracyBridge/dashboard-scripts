@@ -4,11 +4,11 @@
 # Run cronContent.sh every 5 minutes
 */5 * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1
 
-# Sync program specs every 3 minutes
-*/3 * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/work/syncwrapper.log
-
 # Missing UF report daily
 0 1 * * * /home/ubuntu/Dropbox/AWS-LB/bin/missing_uf.sh 2>&1 >>/home/ubuntu/work/missing_uf.log
+
+# Reboot daily at 0050
+50 0  * * * /home/ubuntu/reboot.sh 2>&1 >>/home/ubuntu/reboot.log
 
 # Run cronjob every minute, for testing
 #* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/test.log
