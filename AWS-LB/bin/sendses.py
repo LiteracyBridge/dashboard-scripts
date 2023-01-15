@@ -78,9 +78,9 @@ def main():
     arg_parser.add_argument('--html', help='Send the body as html', action='store_true')
     arg_parser.add_argument('--body', help='File containing the body of the email.')
     arg_parser.add_argument('--sender', help='Email address from. Must be verified with SES.',
-                            default='ictnotifications@literacybridge.org')
+                            default='ictnotifications@amplio.org')
     arg_parser.add_argument('--to', help='Email address to. Must be verified with SES.',
-                            default='ictnotifications@literacybridge.org')
+                            default='ictnotifications@amplio.org')
     arg_parser.add_argument('--dry-run', '-n', help='Do not actually send the email.', action='store_true')
 
     options = arg_parser.parse_args()
