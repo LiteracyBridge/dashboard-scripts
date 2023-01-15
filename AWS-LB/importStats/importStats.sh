@@ -4,7 +4,7 @@ IFS="`printf '\n\t'`"
 goodIFS="$IFS"
 #CONFIGURATION
 # uncomment next line for script debugging
-set -x
+#set -x
 
 # Set default values for any settings that aren't externally set.
 function setDefaults() {
@@ -114,23 +114,11 @@ function main() {
 
 # Gathers the new files, from Dropbox and from s3.
 function gatherFiles() {
-    # gather from dropbox
-    # echo "Gather from Dropbox"
-    # time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats ${importdir} ${dailyDir} ${timestamp} --report movedbx.txt
-    # if [ $? -eq 0 ]; then
-    #     gatheredAny=true
-    #     if [ -s acm.log ]; then
-    #         # Log file from MoveStats above.
-    #         mv acm.log ${dailyDir}/movedbx.log
-    #     fi
-    #     if [ -s movedbx.txt ]; then
-    #         # Log file from MoveStats above.
-    #         mv movedbx.txt ${dailyDir}/movedbx.txt
-    #     fi
-    # fi
 
     set -x
     # gather from s3
+    echo "-------- gatherFiles: Gathering the collected data from s3 --------"
+
     echo "Gather from s3"
     tmpdir=$(mktemp -d)
     echo "temp:${tmpdir}"
@@ -188,7 +176,9 @@ function importUserFeedback() {
     local dailyDir=$1&&shift
     local recordingsDir=${dailyDir}/userrecordings
 
+    echo "-------- importUserFeedback: Importing user feedback audio to s3, metadata to database. --------"
 
+    set -x
     echo "Checking for user feedback recordings"
     if [ -d "${recordingsDir}" ]; then
         echo "Export user feedback from ${recordingsDir} and upload to ${s3uf}"
@@ -209,6 +199,8 @@ function importUserFeedback() {
         echo "No directory ${recordingsDir}"
     fi
 
+    set +x
+    true
 }
 
 # injects css, if not already done
@@ -221,6 +213,30 @@ function getCss() {
     fi
 }
 
+# Extract the tb-loader artifacts tbsdeployed.csv, tbscollected.csv, and stats_collected.properties
+# from the tbcd1235.zip file
+function extractTbLoaderArtifacts() {
+    local directory=$1&&shift
+    local f
+    (
+        cd ${directory}
+        for f in tbsdeployed.csv tbscollected.csv stats_collected.properties; do
+            if [ ! -e $f ]; then
+                echo no existing $f
+                rm -f tmp
+                if unzip -p tbcd*.zip "*$f">tmp ; then
+                    echo extracted $f from zip
+                    mv -v tmp $f
+                else
+                    echo could not extract $f from zip: $?
+                fi
+            else
+                echo found existing $f
+            fi
+        done
+    )
+}
+
 # Import statistics to PostgreSQL database.
 function importStatistics() {
     local dailyDir=$1&&shift
@@ -228,12 +244,16 @@ function importStatistics() {
 
     cat importStats.css >>"${report}"
 
+    echo "-------- importStatistics: Importing 'playstatistics' to database. --------"
+    echo "<h2>Importing TB Statistics to database.</h2>">>${report}
+
     # These -D settings are needed to turn down the otherwise overwhelming hibernate logging.
     local quiet1=-Dorg.jboss.logging.provider=slf4j
     local quiet2=-Djava.util.logging.config.file=simplelogger.properties
     # iterate the timestamp directories.
     for statdir in $(cd ${dailyDir}; ls); do
         if [ -d "${dailyDir}/${statdir}" ]; then
+            # -f: force;  -z: process-zips-from-this-directory; -d put-logs-here; -r: append-report-here
             local import=(time java ${quiet1} ${quiet2} -jar ${core} -f -z "${dailyDir}/${statdir}" -d "${dailyDir}/${statdir}" -r "${report}")
 
             $verbose && echo "${import[@]}"
@@ -253,6 +273,7 @@ function importAltStatistics() {
     local recipientsmapfile="${dailyDir}/recipients_map.csv"
 
     getCss
+    echo "-------- importAltStatistics: Importing playstatistics to database. --------"
     echo "<h2>Importing Play Statistics to database.</h2>">>${report}
     rm "${report}.tmp"
 
@@ -285,6 +306,7 @@ EndOfQuery
 
 function importDeployments() {
     local dailyDir=$1&&shift
+    echo "-------- importDeployments: Importing Deployment installations to database. --------"
     echo "<h2>Importing Deployment installations to database.</h2>">>${report}
     rm "${report}.tmp"
 
@@ -296,21 +318,28 @@ function importDeployments() {
     ${verbose} && echo "${extract[@]}">>"${report}.tmp"
     ${execute} && "${extract[@]}" | tee -a "${report}.tmp"
   
-    # Import into db, and update tbsdeployed
-    IFS=${traditionalIFS}
-    ${psql} ${dbcxn}  <<EndOfQuery | tee -a "${report}.tmp"
-    \\timing
-    \\set ECHO all
-    create temporary table tbtemp as select * from tbsdeployed where false;
-    \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
-    delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
-    insert into tbsdeployed select * from tbtemp on conflict do nothing;
-EndOfQuery
-    IFS=${goodIFS}
-
+    # This creates a ~/dashboardreports/${programid}/${year}/${month}/${day}/tbsdeployed.csv file. Could be accomplished by
+    # psql $dbcxn -c "select * from tbsdeployed where project='${programid}' and deployedtimestamp::date='${year}-${month}-${day}';"
     local partition=("${bin}/dailytbs.py" ${deploymentsfile})
     ${verbose} && echo "${partition[@]}">>"${report}.tmp"
     ${execute} && "${partition[@]}">>"${report}.tmp"
+
+    echo "get tb-loader artifacts"
+    # iterate the timestamp directories and extract TB-Loader artifacts.
+    for statdir in $(cd ${dailyDir}; ls); do
+        if [ -d "${dailyDir}/${statdir}" ]; then
+            # Extract some files from the zipped collected data: tbsdeployed.csv, tbscollected.csv, stats_collected.properties
+            ${verbose} && echo "extractTbLoaderArtifacts ${dailyDir}/${statdir}">>"${report}.tmp"
+            ${execute} && extractTbLoaderArtifacts "${dailyDir}/${statdir}">>"${report}.tmp"
+        fi
+    done
+
+    # Import into db, and update tbsdeployed
+    # Insert from *Z directories into tbsdeployed and tbscollected. Translate coordinates->latitude/longitude (--c2ll). On conflict
+    # with primary key (alreay inserted) do nothing (no --upsert option).
+    csvInsert.py --table tbscollected --files *Z/tbscollected.csv --verbose --c2ll 2>&1 | tee -a "${report}.tmp"
+    csvInsert.py --table tbsdeployed  --files *Z/tbsdeployed.csv  --verbose --c2ll 2>&1 | tee -a "${report}.tmp"
+    #csvInsert.py --table tbsdeployed --files ${deploymentsfile} --c2ll 2>&1 | tee -a "${report}.tmp"
 
     echo '<div class="reportline">'>>"${report}"
     awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"

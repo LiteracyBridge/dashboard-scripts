@@ -218,6 +218,30 @@ function getCss() {
     fi
 }
 
+# Extract the tb-loader artifacts tbsdeployed.csv, tbscollected.csv, and stats_collected.properties
+# from the tbcd1235.zip file
+function extractTbLoaderArtifacts() {
+    local directory=$1&&shift
+    local f
+    (
+        cd ${directory}
+        for f in tbsdeployed.csv tbscollected.csv stats_collected.properties; do
+            if [ ! -e $f ]; then
+                echo no existing $f
+                rm -f tmp
+                if unzip -p tbcd*.zip "*$f">tmp ; then
+                    echo extracted $f from zip
+                    mv -v tmp $f
+                else
+                    echo could not extract $f from zip: $?
+                fi
+            else
+                echo found existing $f
+            fi
+        done
+    )
+}
+
 # Import statistics to PostgreSQL database.
 function importStatistics() {
     local dailyDir=$1&&shift
@@ -300,7 +324,6 @@ function importDeployments() {
     echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
     echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
     echo "\n\n\nRe-importing Deployment installations to database."
-    set -x
     echo "<h2>Re-importing Deployment installations to database.</h2>">>${report}
     rm "${report}.tmp"
 
@@ -313,27 +336,37 @@ function importDeployments() {
   
     if $execute; then
         # Import into db, and update tbsdeployed
-        IFS=${traditionalIFS}
-        ${psql} ${dbcxn}  <<EndOfQuery | tee -a "${report}.tmp"
-        \\timing
-        \\set ECHO all
-        create temporary table tbtemp as select * from tbsdeployed where false;
-        \copy tbtemp from '${deploymentsfile}' with delimiter ',' csv header;
-        delete from tbtemp where contentpackage is null;
-        delete from tbsdeployed d using tbtemp t where d.talkingbookid=t.talkingbookid and d.deployedtimestamp=t.deployedtimestamp;
-        insert into tbsdeployed select * from tbtemp on conflict do nothing;
-EndOfQuery
-        IFS=${goodIFS}
 
         local partition=("${bin}/dailytbs.py" ${deploymentsfile})
         ${verbose} && echo "${partition[@]}">>"${report}.tmp"
         ${execute} && "${partition[@]}">>"${report}.tmp"
-
-        echo '<div class="reportline">'>>"${report}"
-        awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
-        echo '</div>'>>"${report}"
     fi
-    set +x
+
+    echo "get tb-loader artifacts"
+    # iterate the timestamp directories and extract TB-Loader artifacts.
+    for statdir in $(cd ${dailyDir}; ls); do
+        if [ -d "${dailyDir}/${statdir}" ]; then
+            # Extract some files from the zipped collected data: tbsdeployed.csv, tbscollected.csv, stats_collected.properties
+            ${verbose} && echo "extractTbLoaderArtifacts ${dailyDir}/${statdir}">>"${report}.tmp"
+            ${execute} && extractTbLoaderArtifacts "${dailyDir}/${statdir}">>"${report}.tmp"
+        fi
+    done
+
+    ${verbose} && echo "report: ${report}"
+
+    # Insert from *Z directories into tbsdeployed and tbscollected. Translate coordinates->latitude/longitude (--c2ll). On conflict
+    # with primary key (alreay inserted) update non-pkey columns (--upsert).
+    ${verbose} && echo "csvInsert.py --table tbscollected --files *Z/tbscollected.csv --verbose --c2ll --upsert"
+    ${execute} &&      (csvInsert.py --table tbscollected --files *Z/tbscollected.csv --verbose --c2ll --upsert 2>&1 | tee -a "${report}.tmp")
+    ${verbose} && echo "csvInsert.py --table tbsdeployed  --files *Z/tbsdeployed.csv  --verbose --c2ll --upsert"
+    ${execute} &&      (csvInsert.py --table tbsdeployed  --files *Z/tbsdeployed.csv  --verbose --c2ll --upsert 2>&1 | tee -a "${report}.tmp")
+    # ${verbose} && echo "csvInsert.py --table tbsdeployed --files ${deploymentsfile} --c2ll"
+    # ${execute} && (csvInsert.py --table tbsdeployed --files ${deploymentsfile} --c2ll 2>&1 | tee -a "${report}.tmp")
+
+    echo '<div class="reportline">'>>"${report}"
+    awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
+    echo '</div>'>>"${report}"
+
     echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
     echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
     echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+\n\n\n\n"
