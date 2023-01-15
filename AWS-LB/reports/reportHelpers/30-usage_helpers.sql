@@ -9,7 +9,7 @@ CREATE OR REPLACE TEMP VIEW content_cats_in_package AS (
         cip.contentpackage, 
         cip.contentid, 
         cip.categoryid, 
-        cip.order AS position, 
+        cip.position, 
         CASE WHEN cat.categoryname:: TEXT~~'General%':: TEXT
              THEN "substring"(cat.categoryname:: TEXT, 9):: CHARACTER VARYING
              ELSE CASE when categoryname IS NULL THEN title ELSE categoryname END
@@ -23,7 +23,7 @@ CREATE OR REPLACE TEMP VIEW content_cats_in_package AS (
 
 
 -- Adds the languagecode, title, format, and duration_seconds from contentmetadata2, 
--- order (within playlist) from contentinpackage, and the category (name) from categories.
+-- position (within playlist) from contentinpackage, and the category (name) from categories.
 -- Commented out lines below swap in 'content_cats_in_package' to replace 'contentinpackage'
 CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
     SELECT DISTINCT
@@ -60,9 +60,9 @@ CREATE OR REPLACE TEMP VIEW usage_info_base_view AS (
       JOIN contentmetadata2 cm
         ON ps.contentid = cm.contentid AND ps.project=cm.project
       JOIN content_cats_in_package cp 
-        ON ps.contentpackage = cp.contentpackage AND ps.contentid=cp.contentid
+        ON ps.contentpackage ILIKE cp.contentpackage AND ps.contentid=cp.contentid
       -- JOIN contentinpackage cp
-      --   ON ps.contentpackage = cp.contentpackage AND ps.contentid = cp.contentid
+      --   ON ps.contentpackage ILIKE cp.contentpackage AND ps.contentid = cp.contentid
       -- JOIN categories cat
       --   ON cat.categoryid = cp.categoryid AND cat.projectcode=cp.project
 ) ;
@@ -117,13 +117,12 @@ SELECT * INTO TEMPORARY TABLE usage_info_temp FROM (
     FROM
       usage_info_base_view uib
       JOIN packagesindeployment pid
-        ON pid.project=uib.project AND pid.contentpackage = uib.contentpackage
+        ON pid.project=uib.project AND pid.contentpackage ILIKE uib.contentpackage
       JOIN deployments d
         ON d.project=uib.project AND d.deployment = pid.deployment
       JOIN languages l ON l.projectcode = uib.project AND l.languagecode = uib.languagecode
       LEFT OUTER JOIN recipients recip
         ON uib.recipientid = recip.recipientid
-
  ) ui_temp ;
 
 -- Update the usage_info table. We've already done the lengthy query (~15 seconds in early 2019), but
@@ -227,7 +226,7 @@ SELECT * INTO TEMPORARY TABLE usage_by_message FROM (
     FROM
       usage_info ps
       JOIN package_tbs_used ptb
-        ON ptb.project=ps.project AND ptb.contentpackage = ps.contentpackage
+        ON ptb.project=ps.project AND ptb.contentpackage ILIKE ps.contentpackage
     GROUP BY
       ps.project,
       ps.deploymentnumber,
