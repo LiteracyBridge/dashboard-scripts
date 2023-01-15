@@ -33,24 +33,24 @@ globalQueries="${codebasedir}/globalQueries.list"
 # Main function (call is at end of file)
 function main() {
 
-    printf "project,path\n" > "${outputdir}/project_list.csv"
+#    printf "project,path\n" > "${outputdir}/project_list.csv"
     projects=($(${psql} ${dbcxn} -c "SELECT projectcode from projects WHERE id >= 0" -t))
     echo WILL NOW ITERATE THROUGH PROJECTS: ${projects[@]}
     for project in "${projects[@]}"; do
         printf "___________________________________\n\nPROJECT:${project}\n"
-        printf "%s,%s/\n" ${project} ${project} >>"${outputdir}/project_list.csv"
+#        printf "%s,%s/\n" ${project} ${project} >>"${outputdir}/project_list.csv"
         projectdir=${outputdir}"/${project}"
         mkdir -p ${projectdir}
         #rm ${projectdir}/${project}-*.csv        
 
-        extractMetadata ${project}
+#        extractMetadata ${project}
     done
 
     runBatchedQueries
 
     # final "report" is current timestamp.
-    echo $(date)>${outputdir}/reports_date.txt
-    distributeReports
+#    echo $(date)>${outputdir}/reports_date.txt
+#    distributeReports
 }
 
 # Copy reports to the ACM- directory. This makes them accessible to partners like CBCC.
@@ -130,11 +130,12 @@ $psql $dbcxn --pset pager=off<<EndOfQuery >log.txt
 \\set ECHO all
 $(cat ${helpers})
 
-$(makePerProjectQueries)
-
-$(makeGlobalQueries)
-
 EndOfQuery
+# Extracted from above
+#
+#$(makePerProjectQueries)
+#
+#$(makeGlobalQueries)
 }
 
 # Make the report name for query and optionsl project
