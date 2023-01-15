@@ -167,9 +167,22 @@ EOF
     mv "$csvDir/packagesindeployment-nonullquote.csv" "$packagesInDeploymentFile"
 
     if [ -f $packagesInDeploymentFile ]; then
-        doSqlCommand "DELETE FROM packagesindeployment WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
-        doSqlCommand "COPY packagesindeployment FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $packagesInDeploymentFile
-        doSqlCommand "UPDATE packagesindeployment SET distribution='$distribution_w_version' WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
+        set -x
+        doSql <<EOF
+            -- #4: Update packagesindeployment for deployment
+            CREATE TEMPORARY TABLE temp_pid AS SELECT * FROM packagesindeployment WHERE FALSE;
+            \COPY temp_pid FROM '${packagesInDeploymentFile}' CSV HEADER;
+            -- Update with the rev-id, passed in from current directory name
+            UPDATE temp_pid SET distribution = '${distribution_w_version}';
+            -- SELECT * from temp_pid;
+            INSERT INTO packagesindeployment
+                 SELECT * FROM temp_pid tt
+                  WHERE tt.packagename NOT IN (SELECT packagename FROM packagesindeployment WHERE project = tt.project);
+EOF
+        set +x
+        #doSqlCommand "DELETE FROM packagesindeployment WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
+        #doSqlCommand "COPY packagesindeployment FROM STDIN WITH (delimiter ',',FORMAT csv, HEADER true, ENCODING 'SQL_ASCII');" < $packagesInDeploymentFile
+        #doSqlCommand "UPDATE packagesindeployment SET distribution='$distribution_w_version' WHERE project='$i' AND UPPER(deployment) IN ($deployments)"
     fi
 
     if [ -f $categoriesInPackagesFile ]; then
