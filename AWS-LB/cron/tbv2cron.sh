@@ -11,7 +11,7 @@ jobtime=$(date +%Y%m%d-%H%M%S)
 echo "Running cron job at $(date) in $(pwd)" > $cronlog 
 cd /home/ubuntu
 source ./.profile
-export PATH=/home/ubuntu:/home/ubuntu/bin:${PATH}:/snap/bin
+export PATH=/home/ubuntu:/home/ubuntu/bin:$PATH
 echo "PATH=${PATH}"
 
 function doTask() {
@@ -19,24 +19,16 @@ function doTask() {
     name=$1 
     # set up log & err files, convenience link to latest log
     logfile=$crondir/${jobtime}-${name}.log
-    errfile=$crondir/${jobtime}-${name}.err
     touch $logfile
     rm $crondir/${name}.log
     ln -s $logfile $crondir/${name}.log
-    rm $crondir/${name}.err
-    ln -s $errfile $crondir/${name}.err
 
     echo "Running ${name} job, logging to $logfile" >>$cronlog
-    $crondir/${name}wrapper.sh >>$logfile 2>$errfile
+    export TIME="\t%E elapsed\n\t%U user\n\t%S sys\n\t%Kk total\n\t%Mk resident\n\t%P %%cpu"
+    /usr/bin/time -ao ${logfile} logReader --s3 tbcd >${logfile} 2>&1
+    ~/acm-stats/AWS-LB/bin/sendses.py --subject 'TBv2 Stats Import' --body ${logfile} 
 
-    # delete size-zero error logs
-    if [ ! -s $errfile ]; then
-      rm $errfile
-      rm $crondir/${name}.err
-    fi
 }
 
-#doTask dropbox
-
-doTask stats
+doTask tbv2stats
 

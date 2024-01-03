@@ -10,11 +10,11 @@ Initialization
   dbcxn     - postgresql connection, 
               "--host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com 
                --port 5432 --username=lb_data_uploader --dbname=dashboard"
-  dropbox   - ~/Dropbox (works because server has a symbolic link from Dropbox)
-  bin       - location of Amplio software, ${dropbox}/AWS-LB/bin 
-  core      - location of stats importer, ${dropbox}/AWS-LB/bin/core-with-deps.jar
-  acm       - location of acm.jar, ${dropbox}/LB-software/ACM-install/ACM/software
-  email     - location of SES email sender, ${dropbox}/AWS-LB/bin/sendses.py
+  stats_root- ~/acm-stats, where software is, where stats are collected and processed
+  bin       - location of Amplio software, ${stats_root}/AWS-LB/bin 
+  core      - location of stats importer, ${bin}/core-with-deps.jar
+  acm       - location of acm.jar, ${bin}/acm
+  email     - location of SES email sender, ${stats_root}/AWS-LB/bin/sendses.py
   s3bucket  - bucket name into which stats have been placed, s3://acm-stats
 
 - Get the current year, month, and day. 

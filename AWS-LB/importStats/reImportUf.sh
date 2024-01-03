@@ -4,12 +4,12 @@
 #   cd into a 'daily directory', like 2021/06/01
 #   run this script 
 
-if [ -z "${dropbox-}" ]; then
-    dropbox=~/Dropbox
+if [ -z "${stats_root-}" ]; then
+    stats_root=~/acm-stats
 fi
 
 if [ -z "${ufexporter-}" ]; then
-    ufexporter=${dropbox}/AWS-LB/bin/ufUtility/ufUtility.py
+    ufexporter=${stats_root}/AWS-LB/bin/ufUtility/ufUtility.py
 fi
 s3uf="s3://amplio-uf/collected"
 

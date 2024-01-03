@@ -1,21 +1,17 @@
-# Run cronjob.sh every 6 hours
+# Run cronjob.sh every 6 hours at x:00. Import v1 stats.
 0 */6 * * * cron/cronjob.sh >cron/cronjob.log 2>&1
 
-# Run v2import every 4 hour at x:55
+# Run v2import every 4 hours at x:55. Import v2 stats.
 55 */4 * * * cron/tbv2cron.sh >cron/cronjob.log 2>&1
 
-# Run cronContent.sh every 5 minutes
-*/5 * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1
-
-# Missing UF report daily
-0 1 * * * /home/ubuntu/Dropbox/AWS-LB/bin/missing_uf.sh 2>&1 >>/home/ubuntu/work/missing_uf.log
+# Missing UF report daily at 01:00.
+0 1 * * * /home/ubuntu/acm-stats/AWS-LB/bin/missing_uf.sh 2>&1 >>/home/ubuntu/work/missing_uf.log
 
 # Reboot daily at 00:45
-45 * * * * /home/ubuntu/reboot.sh 2>&1 >>/home/ubuntu/reboot.log
+45 0 * * * /home/ubuntu/reboot.sh 2>&1 >>/home/ubuntu/reboot.log
 
 # Run cronjob every minute, for testing
-#* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/syncwrapper.sh >>/home/ubuntu/test.log
+#* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/cronjob.sh >>/home/ubuntu/test.log
 #* * * * * /home/ubuntu/Dropbox/AWS-LB/cron/template.sh cron/cronvars.sh
-#* * * * * python3 Dropbox/AWS-LB/cron/DeploymentsToS3Sync/cronjob.py >work/DeploymentsToS3Sync/log/log.txt 2>&1
 
 @reboot /home/ubuntu/bin/dropbox.py start

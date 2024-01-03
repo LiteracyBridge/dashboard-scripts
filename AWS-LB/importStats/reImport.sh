@@ -24,29 +24,44 @@ function setDefaults() {
     if [ -z "${dbcxn-}" ]; then
       dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
     fi
-    if [ -z "${dropbox-}" ]; then
-      dropbox=~/Dropbox
+    if [ -z "${stats_root-}" ]; then
+      stats_root=~/acm-stats
     fi
 
     if [ -z "${bin-}" ]; then
-        bin="${dropbox}/AWS-LB/bin"
+        bin="${stats_root}/AWS-LB/bin"
     fi
     if [ -z "${core-}" ]; then
-      # This lets us test new versions of core-with-deps.jar more easily.
-      core=${dropbox}/AWS-LB/bin/core-with-deps.jar
+        # This lets us test new versions of core-with-deps.jar more easily.
+        core=${bin}/core-with-deps.jar
     fi
     if [ -z "${acm-}" ]; then
-        acm=${dropbox}/LB-software/ACM-install/ACM/software
+        acm=${bin}/acm
     fi
     if [ -z "${email-}" ]; then
-        email=${dropbox}/AWS-LB/bin/sendses.py
+        email=${bin}/sendses.py
     fi
+    if [ -z "${processed_data-}" ]; then
+        processed_data="${stats_root}/processed-data"
+    fi
+    if [ -z "${s3bucket-}" ]; then
+        s3bucket="s3://acm-stats"
+    fi
+    if [ -z "${ufexporter-}" ]; then
+        ufexporter=${bin}/ufUtility/ufUtility.py
+    fi
+
    
     echo "dbcxn is ${dbcxn}"
-    echo "Dropbox in ${dropbox}"
+    echo "Stats root is ${stats_root}"
+    echo "bin in ${bin}"
     echo "core is ${core}"
     echo "acm is ${acm}"
     echo "email is ${email}"
+    echo "processed_data in ${processed_data}"
+    echo "s3import in ${s3import}"
+    echo "s3archive in ${s3archive}"
+    echo "s3uf in ${s3uf}"
     report=importStats.html
     rm ${report}
     echo "$(date)">${report}
@@ -87,7 +102,7 @@ function process() {
 function processYear() {
     local year=$1&&shift
  
-    local yearDir="${dropbox}/collected-data-processed/${year}"
+    local yearDir="${processed_data}/${year}"
     if [ ! -d ${yearDir} ]; then
         echo "${yearDir} does not exist";
         exit 1
@@ -107,7 +122,7 @@ function processMonth() {
     local year=$1&&shift
     local month=$1&&shift
 
-    local monthDir="${dropbox}/collected-data-processed/${year}/${month}"
+    local monthDir="${processed_data}/${year}/${month}"
     if [ ! -d ${monthDir} ]; then
         echo "${monthDir} does not exist";
         exit 1
@@ -128,7 +143,7 @@ function processDay() {
     local month=$1&&shift
     local day=$1&&shift
 
-    local dailyDir=${dropbox}/collected-data-processed/${year}/${month}/${day}
+    local dailyDir=${processed_data}/${year}/${month}/${day}
     if [ ! -d ${dailyDir} ]; then
         echo "${dailyDir} does not exist";
         exit 1
@@ -317,7 +332,6 @@ function importDeployments() {
     local dailyDir=$1&&shift
     local recipientsfile="${dailyDir}/recipients.csv"
     local recipientsmapfile="${dailyDir}/recipients_map.csv"
-    local deploymentsfile="${dailyDir}/tbsdeployed.csv"
 
     getCss
     echo "\n\n\n\n*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
@@ -326,21 +340,6 @@ function importDeployments() {
     echo "\n\n\nRe-importing Deployment installations to database."
     echo "<h2>Re-importing Deployment installations to database.</h2>">>${report}
     rm "${report}.tmp"
-
-    # Gather the deploymentsAll.kvp files from the daily directory
-    deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.kvp')
-    #
-    local extract=(python3.8 "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
-    ${verbose} && echo "${extract[@]}">>"${report}.tmp"
-    ${execute} && "${extract[@]}">>"${report}.tmp"
-  
-    if $execute; then
-        # Import into db, and update tbsdeployed
-
-        local partition=("${bin}/dailytbs.py" ${deploymentsfile})
-        ${verbose} && echo "${partition[@]}">>"${report}.tmp"
-        ${execute} && "${partition[@]}">>"${report}.tmp"
-    fi
 
     echo "get tb-loader artifacts"
     # iterate the timestamp directories and extract TB-Loader artifacts.
@@ -360,8 +359,6 @@ function importDeployments() {
     ${execute} &&      (csvInsert.py --table tbscollected --files *Z/tbscollected.csv --verbose --c2ll --upsert 2>&1 | tee -a "${report}.tmp")
     ${verbose} && echo "csvInsert.py --table tbsdeployed  --files *Z/tbsdeployed.csv  --verbose --c2ll --upsert"
     ${execute} &&      (csvInsert.py --table tbsdeployed  --files *Z/tbsdeployed.csv  --verbose --c2ll --upsert 2>&1 | tee -a "${report}.tmp")
-    # ${verbose} && echo "csvInsert.py --table tbsdeployed --files ${deploymentsfile} --c2ll"
-    # ${execute} && (csvInsert.py --table tbsdeployed --files ${deploymentsfile} --c2ll 2>&1 | tee -a "${report}.tmp")
 
     echo '<div class="reportline">'>>"${report}"
     awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"

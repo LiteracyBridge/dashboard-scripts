@@ -25,16 +25,6 @@ update tbdataoperations
 set outimage=upper(outimage),
 inimage=upper(inimage);
 
--- Just output all packages not matching packagesindeployment in case there is a case issue
--- The dashboard Java code should already be forcing all new entries to be upper case only.
-select distinct contentpackage from syncaggregation
-where contentpackage not in (select contentpackage from packagesindeployment)
-order by contentpackage;
-
-select distinct packageid from playedevents
-where packageid not in (select contentpackage from packagesindeployment)
-order by packageid;
-
 
 delete from tbcollections;
 --insert into tbcollections

@@ -6,6 +6,7 @@ goodIFS="$IFS"
 # uncomment next line for script debugging
 #set -x
 
+
 # Set default values for any settings that aren't externally set.
 function setDefaults() {
     if [ -z "${psql-}" ]; then
@@ -23,28 +24,31 @@ function setDefaults() {
     if [ -z "${dbcxn-}" ]; then
       dbcxn=" --host=lb-device-usage.ccekjtcevhb7.us-west-2.rds.amazonaws.com --port 5432 --username=lb_data_uploader --dbname=dashboard "
     fi
-    if [ -z "${dropbox-}" ]; then
-      dropbox=~/Dropbox
+    if [ -z "${stats_root-}" ]; then
+      stats_root=~/acm-stats
     fi
 
     if [ -z "${bin-}" ]; then
-        bin="${dropbox}/AWS-LB/bin"
+        bin="${stats_root}/AWS-LB/bin"
     fi
     if [ -z "${core-}" ]; then
-      # This lets us test new versions of core-with-deps.jar more easily.
-      core=${dropbox}/AWS-LB/bin/core-with-deps.jar
+        # This lets us test new versions of core-with-deps.jar more easily.
+        core=${bin}/core-with-deps.jar
     fi
     if [ -z "${acm-}" ]; then
-        acm=${dropbox}/LB-software/ACM-install/ACM/software
+        acm=${bin}/acm
     fi
     if [ -z "${email-}" ]; then
-        email=${dropbox}/AWS-LB/bin/sendses.py
+        email=${bin}/sendses.py
+    fi
+    if [ -z "${processed_data-}" ]; then
+        processed_data="${stats_root}/processed-data"
     fi
     if [ -z "${s3bucket-}" ]; then
         s3bucket="s3://acm-stats"
     fi
     if [ -z "${ufexporter-}" ]; then
-        ufexporter=${dropbox}/AWS-LB/bin/ufUtility/ufUtility.py
+        ufexporter=${bin}/ufUtility/ufUtility.py
     fi
     needcss=true
     verbose=true
@@ -52,16 +56,7 @@ function setDefaults() {
 }
 
 function configure() {
-    # Depending on our Dropbox account, the incoming stats may be in one of two different locations.
-    if [ -d ${dropbox}/outbox/stats ]; then
-      # The processing@ account's incoming stats are located here.  
-      importdir=${dropbox}/outbox/stats
-    else
-      # Other accounts, here.  
-      importdir=${dropbox}/stats
-    fi
 
-    echo "Zipping stats and then clearing $importdir."
     # This date format is used all over the LB software; keep it for compatability. 
     timestamp=$(date -u +%Yy%mm%dd%Hh%Mm%Ss)
 
@@ -69,7 +64,9 @@ function configure() {
     curMonth=$(date -u +%m)
     curDay=$(date -u +%d)
 
-    dailyDir=${dropbox}/collected-data-processed/${curYear}/${curMonth}/${curDay}
+    s3DailyDir=${s3bucket}/processed-data/${curYear}/${curMonth}/${curDay}
+
+    dailyDir=${processed_data}/${curYear}/${curMonth}/${curDay}
     mkdir -p ${dailyDir}
 
     timestampedDir=${dailyDir}/${timestamp}
@@ -89,6 +86,18 @@ function configure() {
 
     verbose=true
     execute=true
+
+    echo "dbcxn is ${dbcxn}"
+    echo "Stats root is ${stats_root}"
+    echo "bin in ${bin}"
+    echo "core is ${core}"
+    echo "acm is ${acm}"
+    echo "email is ${email}"
+    echo "processed_data in ${processed_data}"
+    echo "s3import in ${s3import}"
+    echo "s3archive in ${s3archive}"
+    echo "s3uf in ${s3uf}"
+
 }
 
 function main() {
@@ -107,12 +116,20 @@ function main() {
         sendMail
     fi
 
+    # Adds and updates files, but won't remove anything.
+    echo "aws s3 sync ${dailyDir} ${s3DailyDir}"
+    set -x
+    aws s3 sync ${dailyDir} ${s3DailyDir}
+
     # If the timestampedDir is empty, we don't want it. Same for the dailyDir. If can't remove, ignore error.
-    rmdir -p ${timestampedDir}
+    if [ -z ${timestampedDir}/tmp ]; then
+        rm ${timestampedDir}/tmp
+    fi
+    rmdir -vp ${timestampedDir}
 }
 
 
-# Gathers the new files, from Dropbox and from s3.
+# Gathers the new files, from s3.
 function gatherFiles() {
 
     set -x
@@ -219,6 +236,7 @@ function extractTbLoaderArtifacts() {
     local directory=$1&&shift
     local f
     (
+        echo "-------- extractTbLoaderArtifacts: in directory ${directory} --------"
         cd ${directory}
         for f in tbsdeployed.csv tbscollected.csv stats_collected.properties; do
             if [ ! -e $f ]; then
@@ -310,19 +328,6 @@ function importDeployments() {
     echo "<h2>Importing Deployment installations to database.</h2>">>${report}
     rm "${report}.tmp"
 
-    local deploymentsfile="${dailyDir}/tbsdeployed.csv"
-    # Gather the deploymentsAll.log files from the daily directory
-    deploymentsLogs=$(find "${dailyDir}" -iname 'deploymentsAll.kvp')
-    #
-    local extract=(python3.8 "${bin}/tbsdeployed.py" --map ${recipientsmapfile}  --output ${deploymentsfile} ${deploymentsLogs})
-    ${verbose} && echo "${extract[@]}">>"${report}.tmp"
-    ${execute} && "${extract[@]}" | tee -a "${report}.tmp"
-  
-    # This creates a ~/dashboardreports/${programid}/${year}/${month}/${day}/tbsdeployed.csv file. Could be accomplished by
-    # psql $dbcxn -c "select * from tbsdeployed where project='${programid}' and deployedtimestamp::date='${year}-${month}-${day}';"
-    local partition=("${bin}/dailytbs.py" ${deploymentsfile})
-    ${verbose} && echo "${partition[@]}">>"${report}.tmp"
-    ${execute} && "${partition[@]}">>"${report}.tmp"
 
     echo "get tb-loader artifacts"
     # iterate the timestamp directories and extract TB-Loader artifacts.
@@ -339,7 +344,6 @@ function importDeployments() {
     # with primary key (alreay inserted) do nothing (no --upsert option).
     csvInsert.py --table tbscollected --files *Z/tbscollected.csv --verbose --c2ll 2>&1 | tee -a "${report}.tmp"
     csvInsert.py --table tbsdeployed  --files *Z/tbsdeployed.csv  --verbose --c2ll 2>&1 | tee -a "${report}.tmp"
-    #csvInsert.py --table tbsdeployed --files ${deploymentsfile} --c2ll 2>&1 | tee -a "${report}.tmp"
 
     echo '<div class="reportline">'>>"${report}"
     awk '{print "<p>"$0"</p>"}' "${report}.tmp" >>"${report}"
