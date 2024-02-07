@@ -1,11 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env zsh
 # uncomment next line for script debugging
 #set -x
 
-if [ -z "$dropbox" ]; then
-  dropbox=~/Dropbox
-fi
+bucket="s3://"
+source="${0:a:h}/"
+directory="AWS-LB"
 
 # Diff the version controlled directory against the deployment directory
-opendiff ./AWS-LB ${dropbox}/AWS-LB 
+bcompare ${source}${directory}  ${bucket}${directory}    
 

@@ -1,6 +1,6 @@
-export DEPLOY_RSYNC=--dry-run
+export dryrun=--dryrun
 
 ./deploy.sh
 
-unset DEPLOY_RSYNC
+unset dryrun
 

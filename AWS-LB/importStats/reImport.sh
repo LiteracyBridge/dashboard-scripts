@@ -51,7 +51,20 @@ function setDefaults() {
         ufexporter=${bin}/ufUtility/ufUtility.py
     fi
 
-   
+}
+
+function main() {
+    setDefaults
+
+    readArguments "$@"
+
+    s3import="${s3bucket}/collected-data"
+    s3uf="s3://amplio-uf/collected"
+
+    curHour=$(date -u +%H)
+    curMinute=$(date -u +%M)
+    curSecond=$(date -u +%S)
+  
     echo "dbcxn is ${dbcxn}"
     echo "Stats root is ${stats_root}"
     echo "bin in ${bin}"
@@ -60,25 +73,24 @@ function setDefaults() {
     echo "email is ${email}"
     echo "processed_data in ${processed_data}"
     echo "s3import in ${s3import}"
-    echo "s3archive in ${s3archive}"
     echo "s3uf in ${s3uf}"
     report=importStats.html
     rm ${report}
     echo "$(date)">${report}
     needcss=true
-}
 
-function main() {
-    setDefaults
-    readArguments "$@"
 
-    if ! $userfeedback && ! $statistics && ! $installations; then
+    if ! $userfeedback && ! $statistics && ! $deployments; then
         echo "No function specified, exiting"
         exit 1
     fi
 
     process
     sendMail
+
+    if [ $userfeedback ]; then
+        echo "user feedback is NYI. Use reImportUF.sh"
+    fi
 }
 
 function process() {
@@ -144,7 +156,9 @@ function processDay() {
     local day=$1&&shift
 
     local dailyDir=${processed_data}/${year}/${month}/${day}
-    if [ ! -d ${dailyDir} ]; then
+    if ${fromArchive} ; then
+        reGatherFiles ${year} ${month} ${day}
+    elif [ ! -d ${dailyDir} ]; then
         echo "${dailyDir} does not exist";
         exit 1
     fi
@@ -154,74 +168,75 @@ function processDay() {
     getRecipientMap ${dailyDir}
     $userfeedback && importUserFeedback ${dailyDir}
     $statistics && importStatistics ${dailyDir}
-    $installations && importDeployments ${dailyDir}
+    $deployments && importDeployments ${dailyDir}
+
+    if [ ${uploadToS3} ]; then
+        # Adds and updates files, but won't remove anything.
+        s3DailyDir=${s3bucket}/processed-data/${year}/${month}/${day}
+
+        echo "aws s3 sync ${dailyDir} ${s3DailyDir}"
+        set -x
+        aws s3 sync ${dailyDir} ${s3DailyDir}
+        set +x
+    fi
+
+
+}
+
+# Re-creates gathering files from s3, using the archived originals.
+function reGatherFiles() {
+    local year=$1&&shift
+    local month=$1&&shift
+    local day=$1&&shift
+
+    local dailyDir=${processed_data}/${year}/${month}/${day}
+    local timestamp="${year}y${month}m${day}d${curHour}h${curMinute}m${curSecond}s"
+
+    mkdir -p ${dailyDir}
+
+    set -x
+    # gather from s3
+    echo "-------- gatherFiles: Re-gathering the collected data from archived-data --------"
+
+    echo "Re-gather from s3"
+    tmpdir=$(mktemp -d)
+    echo "temp:${tmpdir}"
+
+    s3import=${s3bucket}/archived-data/${year}/${month}/${day}/
+
+    # pull files from s3
+    aws s3 sync ${s3import} ${tmpdir}>reports3.raw
+
+    # process into collected-data
+    echo "Re-process into collected-data"
+    time java -cp ${acm}/acm.jar:${acm}/lib/* org.literacybridge.acm.utils.MoveStats -b blacklist.txt ${tmpdir} ${dailyDir} ${timestamp}
+    if [ $? -eq 0 ]; then
+        gatheredAny=true
+        if [ -s acm.log ]; then
+            # Log file from MoveStats above.
+            mv acm.log ${dailyDir}/moves3.log
+        fi
+    fi
+
+     # clean up the s3 output, and produce a formatted HTML report.
+    cat reports3.raw | tr '\r' '\n' | sed '/^Completed.*remaining/d'>reports3.filtered
+    if [ -s reports3.filtered ]; then
+        cp reports3.filtered ${dailyDir}/s3.log
+        printf "<div class='s3import'><h2>S3 Imports</h2>">rpt.html
+        (IFS=''; while read -r line || [[ -n "$line" ]]; do
+            printf "<p>%s</p>" "$line">>rpt.html
+        done < reports3.filtered)
+        printf "</div>\n">>rpt.html
+        cat rpt.html >>${report}
+    fi
+    rmdir ${tmpdir}
+    set +x
 }
 
 function importUserFeedback() {
-    local dailyDir=$1&&shift
-    echo "Import user feedback to ACM-{project}-FB-{update}."
-    local recordingsDir=${dailyDir}/userrecordings
-    local processedDir=${dailyDir}/recordingsprocessed
-    local skippedDir=${dailyDir}/recordingsskipped
-
-    local cmd
-    set -x
-    # Move processed & skipped recordings back to recordingsDir
-    for f in $(cd "${processedDir}"; find ${ufProject} -type d); do
-        cmd=(mkdir -p "${recordingsDir}/${f}")
-        $verbose && echo "${cmd[@]}"
-        $execute && "${cmd[@]}"
-    done
-
-    for f in $(cd "${processedDir}"; find ${ufProject} -type f); do
-        cmd=(mv "${processedDir}/${f}" "${recordingsDir}/${f}")
-        $verbose && echo "${cmd[@]}"
-        $execute && "${cmd[@]}"
-    done
-
-    for f in $(cd "${skippedDir}"; find ${ufProject} -type d); do
-        cmd=(mkdir -p "${recordingsDir}/${f}")
-        $verbose && echo "${cmd[@]}"
-        $execute && "${cmd[@]}"
-    done
-
-    for f in $(cd "${skippedDir}"; find ${ufProject} -type f); do
-        cmd=(mv "${skippedDir}/${f}" "${recordingsDir}/${f}")
-        $verbose && echo "${cmd[@]}"
-        $execute && "${cmd[@]}"
-    done
-    set +x
-
-    if [ -d "${recordingsDir}" ]; then
-        # Capture a list of all the files to be imported
-        lsfile="files"
-        lssuffix=0
-        while [ -e "${dailyDir}/${lsfile}.log" ] ; do
-            lssuffix=$[lssuffix+1]
-            lsfile="files-${lssuffix}"
-        done
-        cmd=(ls -lR "${recordingsDir}")
-        $verbose && echo "${cmd[@]}" \> "${dailyDir}/${lsfile}.log"
-        $execute && "${cmd[@]}">"${dailyDir}/${lsfile}.log"
-        local importer=org.literacybridge.acm.utils.FeedbackImporter
-        mkdir -p ${processedDir}
-        mkdir -p ${skippedDir}
-        echo " User feedback from: ${recordingsDir}"
-        echo "       processed to: ${processedDir}"
-        echo "         skipped to: ${skippedDir}"
-        cmd=(java -cp ${acm}/acm.jar:${acm}/lib/* ${importer} ${recordingsDir} --processed ${processedDir} --skipped ${skippedDir} --report ${report})
-
-        $verbose && echo "${cmd[@]}"
-        $execute && "${cmd[@]}"
-
-        if [ -s acm.log ]; then
-            # Log file from FeedbackImporter
-            mv acm.log ${recordingsDir}/feedbackimporter.log
-        fi
-    else
-        echo "No directory ${recordingsDir}"
-    fi
+    echo "importUserFeedback Not Yet Implemented"
 }
+
 
 # injects css, if not already done
 function getCss() {
@@ -337,8 +352,8 @@ function importDeployments() {
     echo "\n\n\n\n*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
     echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
     echo "*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+*+"
-    echo "\n\n\nRe-importing Deployment installations to database."
-    echo "<h2>Re-importing Deployment installations to database.</h2>">>${report}
+    echo "\n\n\nRe-importing Deployment deployments to database."
+    echo "<h2>Re-importing Deployment deployments to database.</h2>">>${report}
     rm "${report}.tmp"
 
     echo "get tb-loader artifacts"
@@ -408,11 +423,15 @@ function usage() {
     echo "    -m mm      import Month, default all months"
     echo "    -d dd      import Day, default all days, requires month"
     echo ""
+    echo "    -a         re-import from archived-data, not processed-data"
+    echo "               OVERWRITES processed-data. Be sure."
+    echo "    -c         Do NOT update s3://acm-stats/processed-data/yyyy/mm/dd/..."
+    echo ""
     echo "    -u         reimport User feedback"
     echo "    -p pr        when importing UF, limit to project pr."
     echo "    -s         reimport Statistics. If both user feedback and statistics, user feedback is first."
     echo "    -z           when importing Statistics, do not perform database writes."
-    echo "    -i         reimport Deployment Installations. Runs after UF or Stats."
+    echo "    -i         reimport Deployment Deployments. Runs after UF or Stats."
     echo ""
     echo "    -e         no email"
     echo "    -n         dry run, No import"
@@ -420,11 +439,14 @@ function usage() {
     echo "    -l n       Limit to n directories imported"
     echo "    -k m       sKip first m directories"
     echo "                 Note that -l and -k apply to BOTH statistics and user feedback combined."
+    echo "    -x         setopt -x in script"
 }
 
 declare -a remainingArgs=()
 function readArguments() {
     local readopt='getopts $opts opt;rc=$?;[ $rc$opt == 0? ]&&exit 1;[ $rc == 0 ]||{ shift $[OPTIND-1];false; }'
+    fromArchive=false
+    uploadToS3=true
     day=""
     limit=99999
     dryrun=false
@@ -433,7 +455,7 @@ function readArguments() {
     sendemail=true
     statistics=false
     userfeedback=false
-    installations=false
+    deployments=false
     verbose=false
     execute=false
     year=$(date -u +%Y)
@@ -441,8 +463,8 @@ function readArguments() {
     ufProject=''
     if [ $# == 0 ]; then help=true; else help=false; fi
 
-    # Day:, Help, Installations, sKip:, Limit:, Month:, No-execute, Stats, Userfeedback, Verbose, -set X, Year:
-    opts=ed:hik:l:m:np:suvxy:z
+    # from Archive, no Cloud, Day:, no Email, Help, (i)Deployments, sKip:, Limit:, Month:, dry ruN, Stats, Userfeedback, Verbose, -set X, Year:, (z) no sql insert
+    opts=aced:hik:l:m:np:suvxy:z
 
     # Enumerating options
     foundone=false
@@ -450,10 +472,12 @@ function readArguments() {
     do
         #echo OPT:$opt ${OPTARG+OPTARG:$OPTARG}
         case "${opt}" in
+        a) fromArchive=true;;
+        c) uploadToS3=false;;
         e) sendemail=false;;
         d) day=${OPTARG};;
         h) help=true;;
-        i) installations=true;;
+        i) deployments=true;;
         l) limit=${OPTARG};;
         m) month=${OPTARG};;
         n) dryrun=true;;

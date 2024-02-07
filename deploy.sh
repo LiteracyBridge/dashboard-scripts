@@ -1,29 +1,7 @@
 #!/bin/sh
 # uncomment next line for script debugging
 #set -x
-
-if [ -z "$dropbox" ]; then
-  dropbox=~/Dropbox
-fi
-
-# Make sure we know the machine configuration.
-awsDir=$dropbox/AWS-LB
-if [ ! -e ${awsDir}/runAll.sh ]; then
-  echo "Expected to find ${awsDir}/runAll.sh."
-  echo "If your Dropbox installation directory is not '~/Dropbox', please set dropbox variable."
-  exit 100
-fi
-
-# Clean up old installations.
-if [ -e ${awsDir}/ACM_to_RDS ]; then
-  echo "Renaming ACM_to_RDS to updateMetadata"
-  mv ${awsDir}/ACM_to_RDS ${awsDir}/updateMetadata
-fi
-if [ -e ${awsDir}/Initial\ Processing\ SQL ]; then
-  echo "Renaming Initial\\ Processing\\ SQL to initialSQL"
-  mv ${awsDir}/Initial\ Processing\ SQL ${awsDir}/initialSQL
-  rm ${awsDir}/initialSQL/INITIAL_PROCESSING_POST_INSERT_OF_NEW_STATS.*
-fi
+set -u
 
 # Check that the required binary (or other) files exist.
 missing=''
@@ -44,8 +22,40 @@ if [ "${missing}" != "" ]; then
     fi
 fi
 
-# Copy new files. Rsync -va will list only the files copied, and copy only changed files.
-echo "./AWS-LB/* -> ${awsDir}/"
-echo rsync ${DEPLOY_RSYNC} -av --exclude-from=rsync_excludes ./AWS-LB/* ${awsDir}/
-rsync ${DEPLOY_RSYNC} -av --exclude-from=rsync_excludes ./AWS-LB/* ${awsDir}/
+# Copy new files. 
+source=./AWS-LB/
+target=s3://acm-stats/AWS-LB/
+executables=${source}/executables.list
+executablesNew=${executables}.new
+echo "deploy s3: ${source} -> ${target}"
+if [ "${OSTYPE:0:6}" == "darwin" ] ; then
+    # On MacOS use the permissions flag
+    find ${source} -type f -perm +100 | grep -v '~' > ${executablesNew}
+else
+    # On Linux or Cygwin, use -executable
+    find ${source} -type f -executable | grep -v '~' > ${executablesNew}
+fi
+if cmp -s "$executables" "$executablesNew" ; then
+    # Same
+    rm "${executablesNew}"
+else
+    # Changed
+    if [ "${dryrun-}" == "--dryrun" ] ; then
+        diff "${executables}" "${executablesNew}"
+    fi
+    mv -v "${executablesNew}" "${executables}"
+fi
+
+# For a dry run, 
+# export dryrun=--dryrun
+if [ -z "${dryrun-}" ]; then
+    dryrun=" "
+fi
+
+aws s3 sync --delete ${dryrun} ${source} ${target} \
+    --exclude '*~' \
+    --exclude '.*' --exclude '*/.*' \
+    --exclude '*/cloudsync/*' \
+    --exclude '*/__pycache__/*' \
+    --exclude '*/deprecatedQueries/*'
 

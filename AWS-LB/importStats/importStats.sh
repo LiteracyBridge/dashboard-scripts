@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 traditionalIFS="$IFS"
 IFS="`printf '\n\t'`"
-goodIFS="$IFS"
+goodIFS="${IFS}"
 #CONFIGURATION
 # uncomment next line for script debugging
 #set -x
-
+set -u
 
 # Set default values for any settings that aren't externally set.
 function setDefaults() {
